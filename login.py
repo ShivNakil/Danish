@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 import subprocess
+import sqlite3  # Import SQLite library
 
 # Main application window
 root = tk.Tk()
@@ -50,25 +51,62 @@ logo_label.place(x=650, y=20)
 
 # Function to launch OperatorScreen
 def launch_operator_screen():
-    subprocess.Popen(["python", "d:\\Engineering\\Manish\\op.py"])
+    subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\op.py"])
 
 # Function to launch HamburgerMenuApp
 def launch_supervisor_screen():
-    subprocess.Popen(["python", "d:\\Engineering\\Manish\\supervisor.py"])
+    subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\supervisor.py"])
 
-# Login function
+def launch_admin_screen():
+    subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\admin.py"])
+
+def launch_manufacturer_screen():
+    subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\manufacturer.py"])
+
+# Initialize SQLite database
+def initialize_database():
+    conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            employee_type TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Modified login function
 def login():
     username = username_entry.get()
     password = password_entry.get()
-    if username == "admin" and password == "admin123":
-        messagebox.showinfo("Login Successful", "Welcome to InThink Technologies!")
+    conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT employee_type FROM users WHERE username = ? AND password = ?", (username, password))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        employee_type = result[0]
+        messagebox.showinfo("Login Successful", f"Welcome {employee_type.capitalize()}!")
         root.destroy()
-        launch_operator_screen()  # Launch OperatorScreen
-    elif username == "supervisor" and password == "supervisor123":
-        messagebox.showinfo("Login Successful", "Welcome Supervisor!")
-        root.destroy()
-        launch_supervisor_screen()  # Launch HamburgerMenuApp
+        if employee_type == "operator":
+            launch_operator_screen()
+        elif employee_type == "supervisor":
+            launch_supervisor_screen()
+        elif employee_type == "admin":
+            launch_admin_screen()
+        elif employee_type == "manufacturer":
+            launch_manufacturer_screen()
+        else:
+            messagebox.showerror("Error", "Unknown employee type.")
     else:
         messagebox.showerror("Login Failed", "Invalid username or password.")
+
+# Initialize database on application start
+initialize_database()
 
 root.mainloop()

@@ -164,7 +164,7 @@ class HamburgerMenuApp:
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
             messagebox.showinfo("Logout", "User logged out")
             self.root.destroy()
-            subprocess.Popen(["python", "d:\\Engineering\\Manish\\login.py"])  # Relaunch login screen
+            subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\login.py"])  # Relaunch login screen
 
 if __name__ == "__main__":
     root = tk.Tk()

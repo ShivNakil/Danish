@@ -150,7 +150,7 @@ class OperatorScreen(tk.Tk):
     def logout(self):
         messagebox.showinfo("Logout", "Logging out...")
         self.destroy()
-        subprocess.Popen(["python", "d:\\Engineering\\Manish\\login.py"])  # Relaunch login screen
+        subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\login.py"])  # Relaunch login screen
         
     def generate_report(self):
         messagebox.showinfo("Report", "Generating operator-specific report...")
