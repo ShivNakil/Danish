@@ -1,6 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 import sqlite3  # Use SQLite instead of pyodbc
+try:
+    import serial.tools.list_ports  # Import for COM port detection
+except ModuleNotFoundError:
+    messagebox.showerror("Module Error", "The 'pyserial' module is not installed. Please install it using 'pip install pyserial'.")
+    exit()
 
 # DB config
 DB_PATH = "d:\\Engineering\\Manish\\manish\\login.db"
@@ -51,12 +56,11 @@ def toggle_sidebar():
         sidebar.pack_forget()
         sidebar_visible = False
     else:
-        # Pack sidebar to the left (before main area in packing order)
         sidebar.pack(side="left", fill="y")
-        # Re-pack main area to maintain proper layout
         main_area.pack_forget()
         main_area.pack(side="left", fill="both", expand=True)
         sidebar_visible = True
+        refresh_com_ports()  # Refresh COM ports when showing the sidebar
 
 burger_btn = tk.Button(top_bar, text="☰", font=("Arial", 14, "bold"), bg=BLUE2, fg=WHITE,
                       relief="flat", command=toggle_sidebar)
@@ -80,16 +84,45 @@ def show_user_interface():
     tree_frame.pack(padx=10, pady=20, fill="both", expand=True)
     refresh_users()
 
-# Create User button with special command
-tk.Button(sidebar, text="Create User", bg=BLUE2, fg=WHITE, font=("Arial", 10, "bold"),
-          relief="flat", height=2, 
-          command=lambda: [form_frame.pack(pady=20), btn_frame.pack(pady=10)]).pack(fill="x", padx=10, pady=8)
+def logout_user():
+    confirm = messagebox.askyesno("Logout", "Are you sure you want to log out?")
+    if confirm:
+        root.destroy()
+        import subprocess
+        subprocess.Popen(["python", "d:\\Engineering\\Manish\\manish\\login.py"])
+        # messagebox.showinfo("Logged Out", "You have been logged out successfully.")
 
-# Other buttons remain with dummy_action
-for text in ["User Logout", "Settings", "Baud Rate"]:
-    btn = tk.Button(sidebar, text=text, bg=BLUE2, fg=WHITE, font=("Arial", 10, "bold"), 
-                   relief="flat", height=2, command=dummy_action)
-    btn.pack(fill="x", padx=10, pady=8)
+def refresh_com_ports():
+    """Refresh the COM port dropdown values dynamically."""
+    com_ports = [port.device for port in serial.tools.list_ports.comports()]
+    com_port_dropdown["values"] = com_ports
+    if com_ports:
+        com_port_var.set(com_ports[0])  # Set the first COM port as default
+    else:
+        com_port_var.set("No COM Ports Available")
+
+# Sidebar Buttons with Input Fields
+for text in ["User Logout", "Add User", "Baud Rate", "COM Port"]:
+    if text == "User Logout":
+        command = logout_user
+    elif text == "Add User":
+        command = show_user_interface
+    elif text == "Baud Rate":
+        baud_rate_var = tk.StringVar()
+        baud_rate_entry = tk.Entry(sidebar, textvariable=baud_rate_var, width=20)
+        baud_rate_entry.pack(fill="x", padx=10, pady=2)
+        command = lambda: messagebox.showinfo("Info", f"Baud Rate set to {baud_rate_var.get()}")
+    elif text == "COM Port":
+        com_port_var = tk.StringVar(value="Select COM Port")
+        com_port_dropdown = ttk.Combobox(sidebar, textvariable=com_port_var, state="readonly", width=18)
+        com_port_dropdown.pack(fill="x", padx=10, pady=2)
+        refresh_com_ports()  # Refresh COM ports when the dropdown is created
+        command = lambda: messagebox.showinfo("Info", f"COM Port selected: {com_port_var.get()}")
+    else:
+        command = dummy_action
+
+    tk.Button(sidebar, text=text, bg=BLUE2, fg=WHITE, font=("Arial", 10, "bold"),
+              relief="flat", height=2, command=command).pack(fill="x", padx=10, pady=8)
 
 # ---------- User Form ----------
 form_frame = tk.Frame(main_area, bg=WHITE)
@@ -98,18 +131,20 @@ tree_frame = tk.Frame(main_area, bg=WHITE)
 
 tk.Label(form_frame, text="Username:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=0, column=0, sticky="e", pady=5)
 tk.Label(form_frame, text="Password:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=1, column=0, sticky="e", pady=5)
-tk.Label(form_frame, text="First Name:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=2, column=0, sticky="e", pady=5)
-tk.Label(form_frame, text="Last Name:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=3, column=0, sticky="e", pady=5)
+tk.Label(form_frame, text="Name:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=2, column=0, sticky="e", pady=5)
 
 username_entry = tk.Entry(form_frame, width=30)
 password_entry = tk.Entry(form_frame, width=30, show="*")
 fname_entry = tk.Entry(form_frame, width=30)
-lname_entry = tk.Entry(form_frame, width=30)
 
 username_entry.grid(row=0, column=1, padx=10)
 password_entry.grid(row=1, column=1, padx=10)
 fname_entry.grid(row=2, column=1, padx=10)
-lname_entry.grid(row=3, column=1, padx=10)
+
+tk.Label(form_frame, text="Role:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=3, column=0, sticky="e", pady=5)
+role_var = tk.StringVar(value="Operator")  # Default value
+role_dropdown = ttk.Combobox(form_frame, textvariable=role_var, values=["Operator", "Supervisor"], state="readonly", width=28)
+role_dropdown.grid(row=3, column=1, padx=10)
 
 # ---------- DB Actions ----------
 def refresh_users():
@@ -127,9 +162,9 @@ def create_user():
     uname = username_entry.get().strip()
     pwd = password_entry.get().strip()
     fname = fname_entry.get().strip()
-    lname = lname_entry.get().strip()
+    role = role_var.get()
 
-    if not uname or not pwd or not fname or not lname:
+    if not uname or not pwd or not fname or not role:
         messagebox.showerror("Error", "All fields are required.")
         return
 
@@ -138,7 +173,7 @@ def create_user():
         cursor = con.cursor()
         try:
             cursor.execute("INSERT INTO users (username, password, name, employee_type) VALUES (?, ?, ?, ?)", 
-                           (uname, pwd, f"{fname} {lname}", "user"))
+                           (uname, pwd, fname, role))
             con.commit()
             refresh_users()
             clear_form()
@@ -157,13 +192,11 @@ def edit_user():
     user_id.set(values[0])  # Save ID for update
     username_entry.delete(0, tk.END)
     fname_entry.delete(0, tk.END)
-    lname_entry.delete(0, tk.END)
     password_entry.delete(0, tk.END)  # Must be re-entered
+    role_var.set(values[3])  # Set role dropdown value
 
     username_entry.insert(0, values[1])
-    fname, lname = values[2].split(" ", 1) if " " in values[2] else (values[2], "")
-    fname_entry.insert(0, fname)
-    lname_entry.insert(0, lname)
+    fname_entry.insert(0, values[2])
 
     # Show Save button
     save_btn.grid(row=0, column=4, padx=5)
@@ -173,9 +206,9 @@ def save_user():
     uname = username_entry.get().strip()
     pwd = password_entry.get().strip()
     fname = fname_entry.get().strip()
-    lname = lname_entry.get().strip()
+    role = role_var.get()
 
-    if not uid or not uname or not pwd or not fname or not lname:
+    if not uid or not uname or not pwd or not fname or not role:
         messagebox.showerror("Error", "All fields are required.")
         return
 
@@ -183,7 +216,7 @@ def save_user():
     if con:
         cursor = con.cursor()
         cursor.execute("UPDATE users SET username=?, password=?, name=?, employee_type=? WHERE id=?",
-                       (uname, pwd, f"{fname} {lname}", "user", uid))
+                       (uname, pwd, fname, role, uid))
         con.commit()
         con.close()
         refresh_users()
@@ -216,7 +249,6 @@ def clear_form():
     username_entry.delete(0, tk.END)
     password_entry.delete(0, tk.END)
     fname_entry.delete(0, tk.END)
-    lname_entry.delete(0, tk.END)
     user_id.set("")
     save_btn.grid_forget()
 
@@ -239,7 +271,7 @@ def hide_user_interface():
     btn_frame.pack_forget()
     tree_frame.pack_forget()
 
-columns = ("ID", "Username", "First Name", "Last Name")
+columns = ("ID", "Username", "Name", "Role")
 tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
 for col in columns:
     tree.heading(col, text=col)
@@ -254,15 +286,28 @@ def on_tree_select(event):
         values = tree.item(selected, "values")
         username_entry.delete(0, tk.END)
         fname_entry.delete(0, tk.END)
-        lname_entry.delete(0, tk.END)
         password_entry.delete(0, tk.END)
+        role_var.set(values[3])  # Set role dropdown value
 
         username_entry.insert(0, values[1])
-        fname, lname = values[2].split(" ", 1) if " " in values[2] else (values[2], "")
-        fname_entry.insert(0, fname)
-        lname_entry.insert(0, lname)
+        fname_entry.insert(0, values[2])
 
 tree.bind("<<TreeviewSelect>>", on_tree_select)
+
+# ---------- Baud Rate Frame ----------
+baud_rate_frame = tk.Frame(main_area, bg=WHITE)
+tk.Label(baud_rate_frame, text="Enter Baud Rate:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=0, column=0, sticky="e", pady=5)
+baud_rate_entry = tk.Entry(baud_rate_frame, width=30)
+baud_rate_entry.grid(row=0, column=1, padx=10)
+tk.Button(baud_rate_frame, text="Save", bg=BLUE2, fg=WHITE, width=12, command=lambda: messagebox.showinfo("Info", f"Baud Rate set to {baud_rate_entry.get()}")).grid(row=1, column=0, columnspan=2, pady=10)
+
+# ---------- COM Port Frame ----------
+com_port_frame = tk.Frame(main_area, bg=WHITE)
+tk.Label(com_port_frame, text="Select COM Port:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=0, column=0, sticky="e", pady=5)
+com_port_var = tk.StringVar(value="Select COM Port")
+com_port_dropdown = ttk.Combobox(com_port_frame, textvariable=com_port_var, state="readonly", width=28)
+com_port_dropdown.grid(row=0, column=1, padx=10)
+tk.Button(com_port_frame, text="Save", bg=BLUE2, fg=WHITE, width=12, command=lambda: messagebox.showinfo("Info", f"COM Port selected: {com_port_var.get()}")).grid(row=1, column=0, columnspan=2, pady=10)
 
 hide_user_interface() 
 refresh_users()

@@ -53,7 +53,7 @@ class HamburgerMenuApp:
             btn.bind("<Leave>", lambda e: btn.config(bg="#007bff"))
             return btn
 
-        create_rounded_btn(self.menu_inner, "Create User", self.create_user).pack(pady=10, fill='x')
+        # Removed "Create User" button
         create_rounded_btn(self.menu_inner, "Report Generation", self.generate_report).pack(pady=10, fill='x')
         create_rounded_btn(self.menu_inner, "User Logout", self.logout).pack(pady=10, fill='x')
 
@@ -64,12 +64,47 @@ class HamburgerMenuApp:
         )
         settings_frame.pack(pady=20, fill='both')
 
-        baud_btn = tk.Button(
-            settings_frame, text="Baud Rate", font=("Arial", 11),
+        # Baud Rate Field
+        tk.Label(settings_frame, text="Baud Rate:", bg="#003d99", fg="white", font=("Arial", 10)).pack(anchor="w", pady=5)
+        self.baud_rate_var = tk.StringVar()
+        self.baud_rate_entry = tk.Entry(settings_frame, textvariable=self.baud_rate_var, width=20)
+        self.baud_rate_entry.pack(fill="x", pady=5)
+
+        # COM Port Dropdown
+        tk.Label(settings_frame, text="COM Port:", bg="#003d99", fg="white", font=("Arial", 10)).pack(anchor="w", pady=5)
+        self.com_port_var = tk.StringVar(value="Select COM Port")
+        self.com_port_dropdown = ttk.Combobox(settings_frame, textvariable=self.com_port_var, state="readonly", width=18)
+        self.com_port_dropdown.pack(fill="x", pady=5)
+        self.refresh_com_ports()
+
+        # Save Button
+        tk.Button(
+            settings_frame, text="Save Settings", font=("Arial", 11),
             bg="#0047ab", fg="white", relief="flat", bd=0,
-            activebackground="#3366cc", padx=8, pady=6, highlightthickness=0
-        )
-        baud_btn.pack(fill='x', pady=5)
+            activebackground="#3366cc", padx=8, pady=6, highlightthickness=0,
+            command=self.save_settings
+        ).pack(fill='x', pady=10)
+
+    def refresh_com_ports(self):
+        """Refresh the COM port dropdown values dynamically."""
+        try:
+            import serial.tools.list_ports
+            com_ports = [port.device for port in serial.tools.list_ports.comports()]
+            self.com_port_dropdown["values"] = com_ports
+            if com_ports:
+                self.com_port_var.set(com_ports[0])  # Set the first COM port as default
+            else:
+                self.com_port_var.set("No COM Ports Available")
+        except ModuleNotFoundError:
+            self.com_port_var.set("pyserial not installed")
+
+    def save_settings(self):
+        baud_rate = self.baud_rate_var.get()
+        com_port = self.com_port_var.get()
+        if not baud_rate or com_port == "Select COM Port" or com_port == "No COM Ports Available":
+            messagebox.showerror("Error", "Please enter a valid Baud Rate and select a COM Port.")
+        else:
+            messagebox.showinfo("Settings Saved", f"Baud Rate: {baud_rate}\nCOM Port: {com_port}")
 
     def toggle_menu(self):
         if self.menu_visible:
@@ -87,7 +122,36 @@ class HamburgerMenuApp:
         self.root.update_idletasks()
 
     def create_table(self):
-        columns = ["Date", "Time", "Component Name", "Peak Value", "Low Value"]
+        # Add dropdown and input fields above the table
+        control_frame = tk.Frame(self.table_frame, bg="white")
+        control_frame.pack(fill="x", pady=10)
+
+        # Component Dropdown
+        tk.Label(control_frame, text="Component:", bg="white", font=("Arial", 10)).pack(side="left", padx=5)
+        self.component_var = tk.StringVar(value="Select Component")
+        self.component_dropdown = ttk.Combobox(control_frame, textvariable=self.component_var, state="readonly", width=20)
+        self.component_dropdown.pack(side="left", padx=5)
+
+        # Low Value Input
+        tk.Label(control_frame, text="Low Value:", bg="white", font=("Arial", 10)).pack(side="left", padx=5)
+        self.low_value_var = tk.StringVar()
+        self.low_value_entry = tk.Entry(control_frame, textvariable=self.low_value_var, width=15)
+        self.low_value_entry.pack(side="left", padx=5)
+
+        # Peak Value Input
+        tk.Label(control_frame, text="Peak Value:", bg="white", font=("Arial", 10)).pack(side="left", padx=5)
+        self.peak_value_var = tk.StringVar()
+        self.peak_value_entry = tk.Entry(control_frame, textvariable=self.peak_value_var, width=15)
+        self.peak_value_entry.pack(side="left", padx=5)
+
+        # Save Button
+        tk.Button(
+            control_frame, text="Save", bg="#0047ab", fg="white", font=("Arial", 10),
+            command=self.save_component_values
+        ).pack(side="left", padx=10)
+
+        # Table columns (removed "Date" and "Time")
+        columns = ["Component Name", "Peak Value", "Low Value"]
 
         style = ttk.Style()
         style.configure("Treeview", 
@@ -119,14 +183,23 @@ class HamburgerMenuApp:
         hsb = ttk.Scrollbar(self.table_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
+        # Pack the table and scrollbars
+        self.tree.pack(side="top", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+        hsb.pack(side="bottom", fill="x")
 
-        self.table_frame.grid_rowconfigure(0, weight=1)
-        self.table_frame.grid_columnconfigure(0, weight=1)
+    def save_component_values(self):
+        """Save the selected component's low and peak values."""
+        component = self.component_var.get()
+        low_value = self.low_value_var.get()
+        peak_value = self.peak_value_var.get()
 
-        self.tree.bind("<Double-1>", self.on_double_click)
+        if component == "Select Component" or not low_value or not peak_value:
+            messagebox.showerror("Error", "Please select a component and enter valid values.")
+            return
+
+        # Example action: Display the values in a messagebox
+        messagebox.showinfo("Values Saved", f"Component: {component}\nLow Value: {low_value}\nPeak Value: {peak_value}")
 
     def on_double_click(self, event):
         item_id = self.tree.identify_row(event.y)
@@ -162,7 +235,6 @@ class HamburgerMenuApp:
 
     def logout(self):
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
-            messagebox.showinfo("Logout", "User logged out")
             self.root.destroy()
             subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\login.py"])  # Relaunch login screen
 

@@ -21,16 +21,32 @@ user_label.pack(pady=20)
 username_label = tk.Label(login_frame, text="USER", font=("Arial", 14, "bold"), bg="#0052CC", fg="white")
 username_label.pack(pady=5)
 
+# Clear placeholder text on focus
+def clear_placeholder(event, entry, placeholder):
+    if entry.get() == placeholder:
+        entry.delete(0, tk.END)
+        entry.config(fg="black")
+
+# Restore placeholder text on focus out
+def restore_placeholder(event, entry, placeholder):
+    if entry.get() == "":
+        entry.insert(0, placeholder)
+        entry.config(fg="#C0C0C0")
+
 # Username entry
 username_entry = tk.Entry(login_frame, font=("Arial", 14), bd=0, justify="center")
-username_entry.insert(0, "USERNAME")
+username_entry.insert(0, "User Name")  # Updated placeholder
 username_entry.config(fg="#C0C0C0")
+username_entry.bind("<FocusIn>", lambda event: clear_placeholder(event, username_entry, "User Name"))
+username_entry.bind("<FocusOut>", lambda event: restore_placeholder(event, username_entry, "User Name"))
 username_entry.pack(pady=10, padx=20, ipady=5)
 
 # Password entry
 password_entry = tk.Entry(login_frame, font=("Arial", 14), bd=0, justify="center", show="*")
-password_entry.insert(0, "PASSWORD")
+password_entry.insert(0, "Password")  # Updated placeholder
 password_entry.config(fg="#C0C0C0")
+password_entry.bind("<FocusIn>", lambda event: clear_placeholder(event, password_entry, "Password"))
+password_entry.bind("<FocusOut>", lambda event: restore_placeholder(event, password_entry, "Password"))
 password_entry.pack(pady=10, padx=20, ipady=5)
 
 # Login button
@@ -91,7 +107,6 @@ def login():
     
     if result:
         employee_type = result[0]
-        messagebox.showinfo("Login Successful", f"Welcome {employee_type.capitalize()}!")
         root.destroy()
         if employee_type == "operator":
             launch_operator_screen()
@@ -108,5 +123,8 @@ def login():
 
 # Initialize database on application start
 initialize_database()
+
+# Bind Enter key to login button
+root.bind("<Return>", lambda event: login())
 
 root.mainloop()

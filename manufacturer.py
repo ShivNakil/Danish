@@ -1,18 +1,27 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from ttkbootstrap import Style
+import serial.tools.list_ports  # Import for fetching COM ports
+import serial  # Import pyserial for interaction with COM ports
+import os  # Import os for running external scripts
+import sqlite3  # Import SQLite for database operations
+
+DB_PATH = "d:\\Engineering\\Manish\\manish\\login.db"  # Database path
+
+def connect_db():
+    """Connect to the SQLite database."""
+    try:
+        con = sqlite3.connect(DB_PATH)
+        return con
+    except Exception as e:
+        messagebox.showerror("Database Error", f"Connection failed: {e}")
+        return None
 
 def toggle_settings():
     if settings_frame.winfo_ismapped():
         settings_frame.pack_forget()
     else:
         settings_frame.pack(fill='x', padx=10, pady=5)
-
-def toggle_menu(event=None):
-    if burger_menu.menu.winfo_ismapped():
-        burger_menu.menu.unpost()
-    else:
-        burger_menu.menu.post(burger_menu.winfo_rootx(), burger_menu.winfo_rooty() + burger_menu.winfo_height())
 
 def on_resize(event):
     if root.winfo_width() < 1000:
@@ -35,8 +44,8 @@ root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(1, weight=1)
 
 # Sidebar with blue background
-sidebar = tk.Frame(root, bg='#0047ab', width=250)
-sidebar.grid(row=0, column=0, sticky='ns')
+sidebar = tk.Frame(root, bg='#0047ab', width=250)  # Ensure the background is blue
+sidebar.grid(row=0, column=0, sticky='ns')  # Sidebar aligned to the left
 sidebar.grid_propagate(False)
 
 # Settings section with darker blue background
@@ -60,95 +69,329 @@ ttk.Button(report_frame, text="Submit", bootstyle='success', padding=12).pack(fi
 
 # Main content area
 main_frame = tk.Frame(root)
-main_frame.grid(row=0, column=1, sticky='nsew')
-main_frame.grid_rowconfigure(1, weight=1)
+main_frame.grid(row=0, column=1, sticky='nsew')  # Main frame aligned next to the sidebar
+main_frame.grid_rowconfigure(0, weight=0)  # Add a row for the order form
+main_frame.grid_rowconfigure(1, weight=1)  # Ensure the table container row takes remaining space
 main_frame.grid_columnconfigure(0, weight=1)
 
 # Menubar with blue background
 menubar = tk.Frame(main_frame, bg='#0047ab', height=80)
-menubar.grid(row=0, column=0, sticky='ew')
+menubar.grid(row=0, column=0, sticky='ew', pady=0)  # Remove any padding above the menu
 menubar.grid_propagate(False)
 
-# Burger Menu with blue styling
-burger_menu = tk.Menubutton(
-    menubar, 
-    text="☰", 
-    bg='#0047ab', 
-    fg='white', 
-    activebackground='#003366',
-    relief='flat', 
-    width=3,
-    font=('Arial', 16)
-)
+# Fix sidebar toggle functionality
+sidebar_visible = False  # Start with sidebar hidden
 
-# Menu with blue styling
-burger_menu.menu = tk.Menu(
-    burger_menu, 
-    tearoff=0,
-    bg='#0047ab',
-    fg='white',
-    activebackground='#003366',
-    activeforeground='white',
-    bd=0
-)
+def toggle_sidebar():
+    global sidebar_visible
+    if sidebar_visible:
+        sidebar.grid_forget()  # Use grid_forget instead of pack_forget
+        sidebar_visible = False
+    else:
+        sidebar.grid(row=0, column=0, sticky='ns')  # Re-grid the sidebar
+        sidebar_visible = True
 
-burger_menu.menu.add_command(label="User Logout")
-burger_menu.menu.add_command(label="Settings", command=toggle_settings)
-burger_menu.menu.add_command(label="Help")
-burger_menu["menu"] = burger_menu.menu
-burger_menu.pack(side='left', padx=20, pady=10)
-burger_menu.bind("<Button-1>", toggle_menu)
+# Add Burger Menu Button to toggle sidebar
+burger_btn = tk.Button(menubar, text="☰", font=("Arial", 14, "bold"), bg='#0047ab', fg='white',
+                       relief="flat", command=toggle_sidebar)
+burger_btn.pack(side="left", padx=10, pady=10)
+
+# Add blue background to the menu
+menubar.config(bg='#0047ab')
+
+# Sidebar Buttons with Input Fields
+def dummy_action():
+    tk.messagebox.showinfo("Info", "This button does nothing yet.")
+
+def logout_user():
+    confirm = messagebox.askyesno("Logout", "Are you sure you want to log out?")
+    if confirm:
+        root.destroy()
+        os.system("python d:\\Engineering\\Manish\\manish\\login.py")  # Open login.py after logout
+
+def add_user():
+    """Add a new user to the database and display the user table."""
+    add_user_window = tk.Toplevel(root)
+    add_user_window.title("Add User")
+    add_user_window.geometry("600x500")
+    add_user_window.config(bg="white")
+
+    # Add User Form
+    tk.Label(add_user_window, text="Username:", bg="white", font=("Arial", 10)).grid(row=0, column=0, pady=10, padx=10, sticky="e")
+    tk.Label(add_user_window, text="Password:", bg="white", font=("Arial", 10)).grid(row=1, column=0, pady=10, padx=10, sticky="e")
+    tk.Label(add_user_window, text="Name:", bg="white", font=("Arial", 10)).grid(row=2, column=0, pady=10, padx=10, sticky="e")
+    tk.Label(add_user_window, text="Role:", bg="white", font=("Arial", 10)).grid(row=3, column=0, pady=10, padx=10, sticky="e")
+
+    username_entry = tk.Entry(add_user_window, width=30)
+    password_entry = tk.Entry(add_user_window, width=30, show="*")
+    name_entry = tk.Entry(add_user_window, width=30)
+    role_var = tk.StringVar(value="Operator")
+    role_dropdown = ttk.Combobox(add_user_window, textvariable=role_var, values=["admin"], state="readonly", width=28)
+
+    username_entry.grid(row=0, column=1, pady=10, padx=10)
+    password_entry.grid(row=1, column=1, pady=10, padx=10)
+    name_entry.grid(row=2, column=1, pady=10, padx=10)
+    role_dropdown.grid(row=3, column=1, pady=10, padx=10)
+
+    def save_user():
+        """Save the new user to the database."""
+        username = username_entry.get().strip()
+        password = password_entry.get().strip()
+        name = name_entry.get().strip()
+        role = role_var.get()
+
+        if not username or not password or not name or not role:
+            messagebox.showerror("Error", "All fields are required.")
+            return
+
+        con = connect_db()
+        if con:
+            cursor = con.cursor()
+            try:
+                cursor.execute("INSERT INTO users (username, password, name, employee_type) VALUES (?, ?, ?, ?)",
+                               (username, password, name, role))
+                con.commit()
+                messagebox.showinfo("Success", "User added successfully!")
+                refresh_users()  # Refresh the user table
+            except sqlite3.IntegrityError:
+                messagebox.showerror("Error", "Username already exists.")
+            finally:
+                con.close()
+
+    tk.Button(add_user_window, text="Save", bg="#28A745", fg="white", font=("Arial", 10), command=save_user).grid(row=4, column=0, columnspan=2, pady=20)
+
+    # User Table
+    user_table_frame = tk.Frame(add_user_window, bg="white")
+    user_table_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", padx=10, pady=10)
+
+    columns = ("ID", "Username", "Name", "Role")
+    user_tree = ttk.Treeview(user_table_frame, columns=columns, show="headings")
+    for col in columns:
+        user_tree.heading(col, text=col)
+        user_tree.column(col, anchor="center")
+
+    scroll_y = ttk.Scrollbar(user_table_frame, orient="vertical", command=user_tree.yview)
+    scroll_x = ttk.Scrollbar(user_table_frame, orient="horizontal", command=user_tree.xview)
+    user_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+    user_tree.pack(side="left", fill="both", expand=True)
+    scroll_y.pack(side="right", fill="y")
+    scroll_x.pack(side="bottom", fill="x")
+
+    def refresh_users():
+        """Fetch and display all users in the table."""
+        for row in user_tree.get_children():
+            user_tree.delete(row)
+        con = connect_db()
+        if con:
+            cursor = con.cursor()
+            cursor.execute("SELECT id, username, name, employee_type FROM users")
+            for row in cursor.fetchall():
+                user_tree.insert("", "end", values=row)
+            con.close()
+
+    refresh_users()  # Populate the table initially
+
+def set_baud_rate():
+    """Set the baud rate based on user input."""
+    try:
+        baud_rate = int(baud_rate_var.get())
+        messagebox.showinfo("Success", f"Baud Rate set to {baud_rate}")
+    except ValueError:
+        messagebox.showerror("Error", "Invalid Baud Rate. Please enter a number.")
+
+def refresh_com_ports():
+    """Refresh the COM port dropdown values dynamically."""
+    com_ports = [port.device for port in serial.tools.list_ports.comports()]
+    com_port_dropdown["values"] = com_ports
+    if com_ports:
+        com_port_var.set(com_ports[0])  # Set the first COM port as default
+    else:
+        com_port_var.set("No COM Ports Available")
+
+def connect_to_com_port():
+    """Connect to the selected COM port and display a message."""
+    selected_port = com_port_var.get()
+    if (selected_port == "No COM Ports Available" or not selected_port):
+        messagebox.showerror("Error", "No valid COM port selected.")
+        return
+    try:
+        with serial.Serial(selected_port, baudrate=int(baud_rate_var.get()), timeout=1) as ser:
+            messagebox.showinfo("Success", f"Connected to {selected_port} at {ser.baudrate} baud.")
+    except serial.SerialException as e:
+        messagebox.showerror("Error", f"Failed to connect to {selected_port}: {e}")
+    except ValueError:
+        messagebox.showerror("Error", "Invalid Baud Rate. Please enter a valid number.")
+
+for text in ["User Logout", "Add User", "Baud Rate", "COM Port"]:
+    if text == "User Logout":
+        command = logout_user
+    elif text == "Add User":
+        command = add_user
+    elif text == "Baud Rate":
+        baud_rate_var = tk.StringVar()
+        baud_rate_entry = tk.Entry(sidebar, textvariable=baud_rate_var, width=20)
+        baud_rate_entry.pack(fill="x", padx=10, pady=2)
+        command = set_baud_rate
+    elif text == "COM Port":
+        com_port_var = tk.StringVar(value="Select COM Port")
+        com_port_dropdown = ttk.Combobox(sidebar, textvariable=com_port_var, state="readonly", width=18)
+        com_port_dropdown.pack(fill="x", padx=10, pady=2)
+        refresh_com_ports()  # Refresh COM ports when the dropdown is created
+        connect_button = tk.Button(sidebar, text="Connect", bg='#003f7d', fg='white', font=("Arial", 10, "bold"),
+                                    relief="flat", height=2, command=connect_to_com_port)
+        connect_button.pack(fill="x", padx=10, pady=4)
+        command = lambda: messagebox.showinfo("Info", f"COM Port selected: {com_port_var.get()}")
+    else:
+        command = dummy_action
+
+    tk.Button(sidebar, text=text, bg='#003f7d', fg='white', font=("Arial", 10, "bold"),
+              relief="flat", height=2, command=command).pack(fill="x", padx=10, pady=8)
 
 # Right-side buttons
 ttk.Button(menubar, text="User Database", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
 ttk.Button(menubar, text="User Request", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
 
-# Table with scrollbars
-table_container = tk.Frame(main_frame)
-table_container.grid(row=1, column=0, sticky='nsew', padx=20, pady=20)
+def create_orders_table():
+    """Create the orders table in the database if it doesn't exist."""
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                orderId INTEGER PRIMARY KEY AUTOINCREMENT,
+                orderBy TEXT NOT NULL,
+                componentName TEXT NOT NULL,
+                orderDate TEXT NOT NULL,
+                dueDate TEXT NOT NULL,
+                lowAllowed INTEGER NOT NULL,
+                peakAllowed INTEGER NOT NULL,
+                quantity INTEGER NOT NULL
+            )
+        """)
+        con.commit()
+        con.close()
 
-canvas = tk.Canvas(table_container)
-scroll_y = ttk.Scrollbar(table_container, orient="vertical", command=canvas.yview)
-scroll_x = ttk.Scrollbar(table_container, orient="horizontal", command=canvas.xview)
-scrollable_frame = tk.Frame(canvas)
+create_orders_table()  # Ensure the table exists
 
-scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-canvas.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+def submit_order():
+    """Submit a new order to the database."""
+    order_by = order_by_entry.get().strip()
+    component_name = component_name_entry.get().strip()
+    order_date = order_date_entry.get().strip()
+    due_date = due_date_entry.get().strip()
+    low_allowed = low_allowed_entry.get().strip()
+    peak_allowed = peak_allowed_entry.get().strip()
+    quantity = quantity_entry.get().strip()
 
-canvas.pack(side="left", fill="both", expand=True)
+    if not all([order_by, component_name, order_date, due_date, low_allowed, peak_allowed, quantity]):
+        messagebox.showerror("Error", "All fields are required.")
+        return
+
+    try:
+        low_allowed = float(low_allowed)  # Allow float values
+        peak_allowed = float(peak_allowed)  # Allow float values
+        quantity = int(quantity)
+    except ValueError:
+        messagebox.showerror("Error", "Low Allowed and Peak Allowed must be numbers, and Quantity must be an integer.")
+        return
+
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("""
+            INSERT INTO orders (orderBy, componentName, orderDate, dueDate, lowAllowed, peakAllowed, quantity)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (order_by, component_name, order_date, due_date, low_allowed, peak_allowed, quantity))
+        con.commit()
+        con.close()
+        messagebox.showinfo("Success", "Order submitted successfully!")
+        refresh_orders()
+        clear_order_form()
+
+def clear_order_form():
+    """Clear the order input form."""
+    order_by_entry.delete(0, tk.END)
+    component_name_entry.delete(0, tk.END)
+    order_date_entry.delete(0, tk.END)
+    due_date_entry.delete(0, tk.END)
+    low_allowed_entry.delete(0, tk.END)
+    peak_allowed_entry.delete(0, tk.END)
+    quantity_entry.delete(0, tk.END)
+
+def refresh_orders():
+    """Fetch and display all orders in the table."""
+    for row in orders_tree.get_children():
+        orders_tree.delete(row)
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("SELECT * FROM orders")
+        for row in cursor.fetchall():
+            orders_tree.insert("", "end", values=row)
+        con.close()
+
+# Order Input Form
+order_form_frame = tk.Frame(main_frame, bg="white", padx=10, pady=10)
+order_form_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=10)
+
+tk.Label(order_form_frame, text="Order By:", bg="white", font=("Arial", 10)).grid(row=0, column=0, sticky="w", padx=5)
+order_by_entry = tk.Entry(order_form_frame, width=15)
+order_by_entry.grid(row=0, column=1, padx=5)
+
+tk.Label(order_form_frame, text="Component Name:", bg="white", font=("Arial", 10)).grid(row=0, column=2, sticky="w", padx=5)
+component_name_entry = tk.Entry(order_form_frame, width=15)
+component_name_entry.grid(row=0, column=3, padx=5)
+
+tk.Label(order_form_frame, text="Order Date:", bg="white", font=("Arial", 10)).grid(row=0, column=4, sticky="w", padx=5)
+order_date_entry = tk.Entry(order_form_frame, width=15)
+order_date_entry.grid(row=0, column=5, padx=5)
+
+tk.Label(order_form_frame, text="Due Date:", bg="white", font=("Arial", 10)).grid(row=0, column=6, sticky="w", padx=5)
+due_date_entry = tk.Entry(order_form_frame, width=15)
+due_date_entry.grid(row=0, column=7, padx=5)
+
+tk.Label(order_form_frame, text="Low Allowed:", bg="white", font=("Arial", 10)).grid(row=1, column=0, sticky="w", padx=5)
+low_allowed_entry = tk.Entry(order_form_frame, width=15)
+low_allowed_entry.grid(row=1, column=1, padx=5)
+
+tk.Label(order_form_frame, text="Peak Allowed:", bg="white", font=("Arial", 10)).grid(row=1, column=2, sticky="w", padx=5)
+peak_allowed_entry = tk.Entry(order_form_frame, width=15)
+peak_allowed_entry.grid(row=1, column=3, padx=5)
+
+tk.Label(order_form_frame, text="Quantity:", bg="white", font=("Arial", 10)).grid(row=1, column=4, sticky="w", padx=5)
+quantity_entry = tk.Entry(order_form_frame, width=15)
+quantity_entry.grid(row=1, column=5, padx=5)
+
+tk.Button(order_form_frame, text="Submit", bg="#28A745", fg="white", font=("Arial", 10), command=submit_order).grid(row=1, column=6, columnspan=2, pady=10, padx=5)
+
+# Orders Table
+orders_table_frame = tk.Frame(main_frame, bg="white", padx=10, pady=10)
+orders_table_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
+
+columns = ("Order ID", "Order By", "Component Name", "Order Date", "Due Date", "Low Allowed", "Peak Allowed", "Quantity")
+orders_tree = ttk.Treeview(orders_table_frame, columns=columns, show="headings")
+for col in columns:
+    orders_tree.heading(col, text=col)
+    orders_tree.column(col, anchor="center", width=100)
+
+scroll_y = ttk.Scrollbar(orders_table_frame, orient="vertical", command=orders_tree.yview)
+scroll_x = ttk.Scrollbar(orders_table_frame, orient="horizontal", command=orders_tree.xview)
+orders_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+orders_tree.pack(side="left", fill="both", expand=True)
 scroll_y.pack(side="right", fill="y")
 scroll_x.pack(side="bottom", fill="x")
 
-# Table cells
-rows, cols = 15, 8
-cells = {}
-for r in range(rows):
-    for c in range(cols):
-        cell = tk.Entry(scrollable_frame, width=18, justify='center', relief='ridge', borderwidth=1, font=('Arial', 10))
-        cell.grid(row=r, column=c, sticky='nsew', padx=2, pady=2)
-        cells[(r, c)] = cell
+refresh_orders()  # Populate the table initially
 
-for c in range(cols):
-    scrollable_frame.grid_columnconfigure(c, weight=1, uniform="cols")
-for r in range(rows):
-    scrollable_frame.grid_rowconfigure(r, weight=1, uniform="rows")
+main_frame.grid_rowconfigure(0, weight=0)  # Ensure the menubar row has no extra space
+main_frame.grid_rowconfigure(1, weight=0)  # Add a row for the order form
+main_frame.grid_rowconfigure(2, weight=1)  # Ensure the table container row takes remaining space
+
+menubar.grid(row=0, column=0, sticky='ew', pady=0)  # Place the menubar in the first row
+order_form_frame.grid(row=1, column=0, sticky="ew", padx=20, pady=10)  # Place the order form in the second row
+orders_table_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)  # Place the orders table in the third row
 
 root.bind('<Configure>', on_resize)
-root.mainloop() 
-
- 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+root.mainloop()
