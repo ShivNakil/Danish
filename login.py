@@ -66,8 +66,8 @@ logo_label = tk.Label(root, text="InThink\nTechnologies", fg="#333333", bg="#F5F
 logo_label.place(x=650, y=20)
 
 # Function to launch OperatorScreen
-def launch_operator_screen():
-    subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\op.py"])
+def launch_operator_screen(username, name):
+    subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\op.py", username, name])
 
 # Function to launch HamburgerMenuApp
 def launch_supervisor_screen():
@@ -101,15 +101,15 @@ def login():
     password = password_entry.get()
     conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT employee_type FROM users WHERE username = ? AND password = ?", (username, password))
+    cursor.execute("SELECT employee_type, name FROM users WHERE username = ? AND password = ?", (username, password))
     result = cursor.fetchone()
     conn.close()
     
     if result:
-        employee_type = result[0]
+        employee_type, name = result
         root.destroy()
         if employee_type == "operator":
-            launch_operator_screen()
+            launch_operator_screen(username, name)
         elif employee_type == "supervisor":
             launch_supervisor_screen()
         elif employee_type == "admin":

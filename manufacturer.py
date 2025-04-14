@@ -275,6 +275,26 @@ def create_orders_table():
 
 create_orders_table()  # Ensure the table exists
 
+def create_parameters_table():
+    """Create the parametersDetails table in the database if it doesn't exist."""
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS parametersDetails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                orderId INTEGER NOT NULL,
+                parameterName TEXT NOT NULL,
+                low REAL,
+                high REAL,
+                FOREIGN KEY (orderId) REFERENCES orders(orderId)
+            )
+        """)
+        con.commit()
+        con.close()
+
+create_parameters_table()  # Ensure the table exists
+
 def submit_order():
     """Submit a new order to the database."""
     order_by = order_by_entry.get().strip()
@@ -332,6 +352,130 @@ def refresh_orders():
             orders_tree.insert("", "end", values=row)
         con.close()
 
+def view_order():
+    """View the details of the selected order in a new frame."""
+    selected_item = orders_tree.selection()
+    if not selected_item:
+        messagebox.showerror("Error", "No order selected.")
+        return
+
+    order_details = orders_tree.item(selected_item, "values")
+    if not order_details:
+        messagebox.showerror("Error", "Unable to fetch order details.")
+        return
+
+    # Create a new frame to display order details
+    view_order_window = Toplevel(root)
+    view_order_window.title("Order Details")
+    view_order_window.geometry("600x600")
+    view_order_window.config(bg="white")
+
+    labels = ["Order ID", "Order By", "Component Name", "Order Date", "Due Date", "Low Allowed", "Peak Allowed", "Quantity"]
+    for i, label in enumerate(labels):
+        tk.Label(view_order_window, text=f"{label}:", bg="white", font=("Arial", 10, "bold")).grid(row=i, column=0, sticky="w", padx=10, pady=5)
+        tk.Label(view_order_window, text=order_details[i], bg="white", font=("Arial", 10)).grid(row=i, column=1, sticky="w", padx=10, pady=5)
+
+    # Frame for parameter inputs
+    parameter_frame = tk.Frame(view_order_window, bg="white")
+    parameter_frame.grid(row=len(labels), column=0, columnspan=2, pady=10, padx=10, sticky="nsew")
+
+    tk.Label(parameter_frame, text="Parameter Name", bg="white", font=("Arial", 10, "bold")).grid(row=0, column=0, padx=5, pady=5)
+
+    parameter_entries = []
+
+    def add_parameter_row():
+        """Add a new row for parameter input."""
+        row = len(parameter_entries) + 1
+        parameter_name_entry = tk.Entry(parameter_frame, width=20)
+        parameter_name_entry.grid(row=row, column=0, padx=5, pady=5)
+        parameter_entries.append(parameter_name_entry)
+
+    def save_parameters():
+        """Save all parameter details to the database."""
+        for parameter_name_entry in parameter_entries:
+            parameter_name = parameter_name_entry.get().strip()
+
+            if not parameter_name:
+                messagebox.showerror("Error", "All fields are required for each parameter.")
+                return
+
+            con = connect_db()
+            if con:
+                cursor = con.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO parametersDetails (orderId, parameterName)
+                        VALUES (?, ?)
+                    """, (order_details[0], parameter_name))
+                    con.commit()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save parameter: {e}")
+                finally:
+                    con.close()
+
+        messagebox.showinfo("Success", "All parameters saved successfully!")
+        refresh_parameters()
+
+    def delete_parameter():
+        """Delete the selected parameter from the database."""
+        selected_item = parameter_tree.selection()
+        if not selected_item:
+            messagebox.showerror("Error", "No parameter selected.")
+            return
+
+        parameter_id = parameter_tree.item(selected_item, "values")[0]
+        con = connect_db()
+        if con:
+            cursor = con.cursor()
+            try:
+                cursor.execute("DELETE FROM parametersDetails WHERE id = ?", (parameter_id,))
+                con.commit()
+                messagebox.showinfo("Success", "Parameter deleted successfully!")
+                refresh_parameters()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete parameter: {e}")
+            finally:
+                con.close()
+
+    def refresh_parameters():
+        """Fetch and display all parameters for the selected order."""
+        for row in parameter_tree.get_children():
+            parameter_tree.delete(row)
+        con = connect_db()
+        if con:
+            cursor = con.cursor()
+            cursor.execute("SELECT id, parameterName FROM parametersDetails WHERE orderId = ?", (order_details[0],))
+            for row in cursor.fetchall():
+                parameter_tree.insert("", "end", values=row)
+            con.close()
+
+    # Add initial row for parameter input
+    add_parameter_row()
+
+    # Buttons to add more rows and save parameters
+    tk.Button(view_order_window, text="Add Parameter", bg="#007BFF", fg="white", font=("Arial", 10), command=add_parameter_row).grid(row=len(labels) + 1, column=0, pady=10)
+    tk.Button(view_order_window, text="Save Parameters", bg="#28A745", fg="white", font=("Arial", 10), command=save_parameters).grid(row=len(labels) + 1, column=1, pady=10)
+
+    # Parameter table
+    parameter_table_frame = tk.Frame(view_order_window, bg="white")
+    parameter_table_frame.grid(row=len(labels) + 2, column=0, columnspan=2, pady=10, padx=10, sticky="nsew")
+
+    parameter_columns = ("ID", "Parameter Name")
+    parameter_tree = ttk.Treeview(parameter_table_frame, columns=parameter_columns, show="headings")
+    for col in parameter_columns:
+        parameter_tree.heading(col, text=col)
+        parameter_tree.column(col, anchor="center", width=150)
+
+    scroll_y = ttk.Scrollbar(parameter_table_frame, orient="vertical", command=parameter_tree.yview)
+    parameter_tree.configure(yscrollcommand=scroll_y.set)
+
+    parameter_tree.pack(side="left", fill="both", expand=True)
+    scroll_y.pack(side="right", fill="y")
+
+    tk.Button(view_order_window, text="Delete Parameter", bg="#DC3545", fg="white", font=("Arial", 10), command=delete_parameter).grid(row=len(labels) + 3, column=0, columnspan=2, pady=10)
+
+    refresh_parameters()
+
 # Order Input Form
 order_form_frame = tk.Frame(main_frame, bg="white", padx=10, pady=10)
 order_form_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=10)
@@ -385,6 +529,10 @@ scroll_y.pack(side="right", fill="y")
 scroll_x.pack(side="bottom", fill="x")
 
 refresh_orders()  # Populate the table initially
+
+# Add a "View" button to the orders table
+view_button = tk.Button(orders_table_frame, text="View Order", bg="#007BFF", fg="white", font=("Arial", 10), command=view_order)
+view_button.pack(side="top", pady=10)
 
 main_frame.grid_rowconfigure(0, weight=0)  # Ensure the menubar row has no extra space
 main_frame.grid_rowconfigure(1, weight=0)  # Add a row for the order form
