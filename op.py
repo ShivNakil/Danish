@@ -1,5 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import sys
+import sqlite3  # Add this import for database interaction
+import random  # Add this import for generating random values
+import datetime  # Add this import for date and time handling
 try:
     import serial.tools.list_ports
 except ModuleNotFoundError:
@@ -7,12 +11,13 @@ except ModuleNotFoundError:
     exit()
 
 class OperatorApp:
-    def __init__(self, root, username):
+    def __init__(self, root, username, name):
         self.root = root
-        self.root.title(f"Operator Screen - {username}")  # Display logged-in user's name
-        self.root.geometry("800x500")
+        self.root.title(f"Operator Screen - {username} {name}")  # Display the name in the title
+        self.root.state("zoomed")  # Open in maximized state
         self.root.configure(bg="white")
-        self.root.minsize(600, 400)
+
+        self.operator_name = name  # Store operator name
 
         # === Top Bar with Username ===
         self.topbar = tk.Frame(self.root, height=50, bg="#0047ab")
@@ -28,49 +33,315 @@ class OperatorApp:
         self.main_area = tk.Frame(self.root, bg="white")
         self.main_area.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # === COM Port Selection ===
+        # === Fields in a Single Line ===
+        self.fields_frame = tk.Frame(self.main_area, bg="white")
+        self.fields_frame.pack(fill="x", pady=10)
+
+        # COM Port Selection
+        tk.Label(self.fields_frame, text="COM Port:", font=("Arial", 12), bg="white").pack(side="left", padx=5)
         self.com_port_var = tk.StringVar(value="Select COM Port")
-        tk.Label(self.main_area, text="Select COM Port:", font=("Arial", 12), bg="white").grid(row=0, column=0, sticky="e", pady=5)
-        self.com_port_dropdown = ttk.Combobox(self.main_area, textvariable=self.com_port_var, state="readonly", width=30)
-        self.com_port_dropdown.grid(row=0, column=1, padx=10)
+        self.com_port_dropdown = ttk.Combobox(self.fields_frame, textvariable=self.com_port_var, state="readonly", width=20)
+        self.com_port_dropdown.pack(side="left", padx=5)
         self.refresh_com_ports()
 
-        # === Baud Rate Setting ===
+        # Baud Rate Setting
+        tk.Label(self.fields_frame, text="Baud Rate:", font=("Arial", 12), bg="white").pack(side="left", padx=5)
         self.baud_rate_var = tk.StringVar()
-        tk.Label(self.main_area, text="Enter Baud Rate:", font=("Arial", 12), bg="white").grid(row=1, column=0, sticky="e", pady=5)
-        self.baud_rate_entry = tk.Entry(self.main_area, textvariable=self.baud_rate_var, width=33)
-        self.baud_rate_entry.grid(row=1, column=1, padx=10)
+        self.baud_rate_entry = tk.Entry(self.fields_frame, textvariable=self.baud_rate_var, width=15)
+        self.baud_rate_entry.pack(side="left", padx=5)
 
-        # === Save Button ===
-        self.save_button = tk.Button(
-            self.main_area, text="Save Settings", font=("Arial", 12, "bold"),
-            bg="#0047ab", fg="white", command=self.save_settings
+        # Order Selection
+        tk.Label(self.fields_frame, text="Order:", font=("Arial", 12), bg="white").pack(side="left", padx=5)
+        self.order_var = tk.StringVar(value="Select Order")
+        self.order_dropdown = ttk.Combobox(self.fields_frame, textvariable=self.order_var, state="readonly", width=20)
+        self.order_dropdown.pack(side="left", padx=5)
+        self.order_dropdown.bind("<<ComboboxSelected>>", self.populate_components)
+
+        # Component Selection
+        tk.Label(self.fields_frame, text="Component:", font=("Arial", 12), bg="white").pack(side="left", padx=5)
+        self.component_var = tk.StringVar(value="Select Component")
+        self.component_dropdown = ttk.Combobox(self.fields_frame, textvariable=self.component_var, state="readonly", width=20)
+        self.component_dropdown.pack(side="left", padx=5)
+        self.component_dropdown.bind("<<ComboboxSelected>>", self.populate_parameters)
+
+        # Parameter Selection
+        tk.Label(self.fields_frame, text="Parameter:", font=("Arial", 12), bg="white").pack(side="left", padx=5)
+        self.parameter_var = tk.StringVar(value="Select Parameter")
+        self.parameter_dropdown = ttk.Combobox(self.fields_frame, textvariable=self.parameter_var, state="readonly", width=20)
+        self.parameter_dropdown.pack(side="left", padx=5)
+
+        # Read Values Button
+        self.read_button = tk.Button(
+            self.fields_frame, text="Read Values", font=("Arial", 12, "bold"),
+            bg="#0047ab", fg="white", command=self.read_values
         )
-        self.save_button.grid(row=2, column=0, columnspan=2, pady=20)
+        self.read_button.pack(side="left", padx=10)
+
+        self.populate_orders()  # Populate orders on initialization
+
+        # === Table Area ===
+        self.table_frame = tk.Frame(self.main_area, bg="white")
+        self.table_frame.pack(fill="both", expand=True, pady=10)
+
+        # Table columns
+        columns = ["Order ID", "Component Serial Number", "Component Name", "Parameter Name", "Value"]
+
+        self.tree = ttk.Treeview(
+            self.table_frame,
+            columns=columns,
+            show="headings",
+            height=15,
+            selectmode="browse"
+        )
+
+        for col in columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=200, anchor="center")
+
+        # Scrollbars
+        vsb = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(self.table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        # Pack the table and scrollbars
+        self.tree.pack(side="top", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+        hsb.pack(side="bottom", fill="x")
+
+        # Submit Button
+        self.submit_button = tk.Button(
+            self.main_area, text="Submit", font=("Arial", 12, "bold"),
+            bg="#28a745", fg="white", command=self.submit_data
+        )
+        self.submit_button.pack(side="bottom", pady=10)
 
     def refresh_com_ports(self):
         """Refresh the COM port dropdown values dynamically."""
         com_ports = [port.device for port in serial.tools.list_ports.comports()]
         self.com_port_dropdown["values"] = com_ports
-        if com_ports:
+        if (com_ports):
             self.com_port_var.set(com_ports[0])  # Set the first COM port as default
         else:
             self.com_port_var.set("No COM Ports Available")
 
-    def save_settings(self):
-        """Save the selected COM port and baud rate."""
-        com_port = self.com_port_var.get()
-        baud_rate = self.baud_rate_var.get()
-        if com_port == "No COM Ports Available" or not baud_rate.isdigit():
-            messagebox.showerror("Error", "Please select a valid COM port and enter a numeric baud rate.")
+    def read_values(self):
+        """Add a row to the table with random values and ensure descending order sorting."""
+        order = self.order_var.get()
+        component = self.component_var.get()
+        parameter = self.parameter_var.get()
+        value = round(random.uniform(0, 1), 2)  # Generate a random value between 0 and 1
+
+        if order == "Select Order" or component == "Select Component" or parameter == "Select Parameter":
+            messagebox.showerror("Error", "Please select valid Order, Component, and Parameter.")
+            return
+
+        # Generate a new component serial number based on the current table entries
+        existing_rows = self.tree.get_children()
+        if existing_rows:
+            max_serial_number = max(int(self.tree.item(row, "values")[1]) for row in existing_rows)
+            new_serial_number = max_serial_number + 1
         else:
-            messagebox.showinfo("Settings Saved", f"COM Port: {com_port}\nBaud Rate: {baud_rate}")
+            new_serial_number = 1
+
+        # Add a new row to the table
+        self.tree.insert("", 0, values=(order, new_serial_number, component, parameter, value))
+
+        # Sort the table in descending order by Component Serial Number
+        self.sort_table_by_column("Component Serial Number", descending=True)
+
+    def sort_table_by_column(self, column_name, descending=False):
+        """Sort the table by the specified column in ascending or descending order."""
+        column_index = self.tree["columns"].index(column_name)
+        rows = [(self.tree.set(child, column_index), child) for child in self.tree.get_children()]
+        rows.sort(key=lambda x: int(x[0]), reverse=descending)  # Sort numerically
+        for index, (_, child) in enumerate(rows):
+            self.tree.move(child, "", index)
+
+    def populate_previous_entries(self):
+        """Populate the table with previous entries for the selected order, component, and parameter."""
+        order = self.order_var.get()
+        component = self.component_var.get()
+        parameter = self.parameter_var.get()
+
+        # Avoid showing error during dropdown population
+        if order in ["Select Order", "No Orders Available"] or \
+           component in ["Select Component", "No Components Available"] or \
+           parameter in ["Select Parameter", "No Parameters Available"]:
+            return  # Do nothing if invalid values are selected
+
+        try:
+            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            cursor = conn.cursor()
+
+            # Fetch previous entries for the selected order, component, and parameter
+            cursor.execute("""
+                SELECT orderId, componentSerialNumber, componentName, parameterName, value
+                FROM measuredValues
+                WHERE orderId = ? AND componentName = ? AND parameterName = ?
+                ORDER BY componentSerialNumber DESC
+            """, (order, component, parameter))
+            rows = cursor.fetchall()
+            conn.close()
+
+            # Clear the table and populate with previous entries
+            self.tree.delete(*self.tree.get_children())
+            for row in rows:
+                self.tree.insert("", "end", values=row)
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error fetching previous entries: {e}")
+
+    def populate_orders(self):
+        """Populate the Order dropdown."""
+        try:
+            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT orderId FROM orders")
+            orders = cursor.fetchall()
+            conn.close()
+
+            if orders:
+                self.order_dropdown["values"] = [order[0] for order in orders]
+                self.order_var.set("Select Order")
+            else:
+                self.order_dropdown["values"] = []
+                self.order_var.set("No Orders Available")
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error fetching orders: {e}")
+
+    def populate_components(self, event=None):
+        """Populate the Component dropdown based on the selected Order."""
+        order = self.order_var.get()
+        if order == "Select Order" or order == "No Orders Available":
+            self.component_dropdown["values"] = []
+            self.component_var.set("Select Component")
+            return
+
+        try:
+            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT componentName FROM orders WHERE orderId = ?", (order,))
+            components = [row[0] for row in cursor.fetchall()]
+            conn.close()
+
+            if components:
+                self.component_dropdown["values"] = components
+                self.component_var.set("Select Component")
+            else:
+                self.component_dropdown["values"] = []
+                self.component_var.set("No Components Available")
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error fetching components: {e}")
+        self.populate_previous_entries()  # Populate previous entries after selection
+
+    def populate_parameters(self, event=None):
+        """Populate the Parameter dropdown based on the selected Component."""
+        order = self.order_var.get()
+        if order == "Select Order" or order == "No Orders Available":
+            self.parameter_dropdown["values"] = []
+            self.parameter_var.set("Select Parameter")
+            return
+
+        try:
+            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT parameterName FROM parametersDetails WHERE orderId = ?", (order,))
+            parameters = [row[0] for row in cursor.fetchall()]
+            conn.close()
+
+            if parameters:
+                self.parameter_dropdown["values"] = parameters
+                self.parameter_var.set("Select Parameter")
+            else:
+                self.parameter_dropdown["values"] = []
+                self.parameter_var.set("No Parameters Available")
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error fetching parameters: {e}")
+        # Bind to call populate_previous_entries only after a parameter is selected
+        self.parameter_dropdown.bind("<<ComboboxSelected>>", lambda e: self.populate_previous_entries())
+
+    def submit_data(self):
+        """Submit only newly added rows to the database."""
+        if not self.tree.get_children():
+            messagebox.showerror("Error", "No data to submit.")
+            return
+
+        if not messagebox.askyesno("Confirmation", "Are you sure you want to submit the data?"):
+            return
+
+        try:
+            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            cursor = conn.cursor()
+
+            # Create the table if it doesn't exist
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS measuredValues (
+                    orderId TEXT NOT NULL,
+                    componentSerialNumber INTEGER PRIMARY KEY AUTOINCREMENT,
+                    componentName TEXT NOT NULL,
+                    parameterName TEXT NOT NULL,
+                    operatorName TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    time TEXT NOT NULL,
+                    value REAL NOT NULL,
+                    isValid TEXT NOT NULL
+                )
+            """)
+
+            # Insert only rows that are newly added (those with no existing componentSerialNumber)
+            for row in self.tree.get_children():
+                values = self.tree.item(row, "values")
+                order, component_serial_number, component, parameter, measured_value = values
+
+                # Check if the row already exists in the database
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM measuredValues
+                    WHERE orderId = ? AND componentSerialNumber = ?
+                """, (order, component_serial_number))
+                exists = cursor.fetchone()[0]
+
+                if exists == 0:  # Only insert if the row does not already exist
+                    # Placeholder logic for validity (replace with actual logic based on uploaded image)
+                    is_valid = "Valid" if float(measured_value) > 0.5 else "Invalid"
+
+                    # Insert the row into the database
+                    cursor.execute("""
+                        INSERT INTO measuredValues (orderId, componentName, parameterName, operatorName, date, time, value, isValid)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        order,
+                        component,
+                        parameter,
+                        self.operator_name,
+                        datetime.date.today().strftime("%Y-%m-%d"),
+                        datetime.datetime.now().strftime("%H:%M:%S"),
+                        measured_value,
+                        is_valid
+                    ))
+
+            conn.commit()
+            conn.close()
+
+            messagebox.showinfo("Success", "New data submitted successfully.")
+            self.tree.delete(*self.tree.get_children())  # Clear the table after submission
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error submitting data: {e}")
 
 if __name__ == "__main__":
-    # Simulate fetching the logged-in user's name
-    logged_in_user = "John Doe"  # Replace this with actual logic to fetch the username
+    # Fetch username and name from command-line arguments
+    logged_in_user = "Shiv"
+    logged_in_name = "Nakil"
+
+    if len(sys.argv) < 3:
+        # messagebox.showerror("Error", "Invalid arguments passed to the application.")
+        # exit()
+        pass
+    else:
+        logged_in_user = sys.argv[1]
+        logged_in_name = sys.argv[2]
+    
     root = tk.Tk()
-    app = OperatorApp(root, logged_in_user)
+    app = OperatorApp(root, logged_in_user, logged_in_name)
     root.mainloop()
 
 
