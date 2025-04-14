@@ -109,7 +109,7 @@ class OperatorScreen(tk.Tk):
             self.tree.column(col, anchor='center', stretch=True)
 
         # Insert sample data
-        for i in range(100):
+        for i in range(5):
             self.tree.insert("", tk.END, 
                            values=(
                                f"2025-04-03 12:{i:02d}:00", 

@@ -5,6 +5,7 @@ import serial.tools.list_ports  # Import for fetching COM ports
 import serial  # Import pyserial for interaction with COM ports
 import os  # Import os for running external scripts
 import sqlite3  # Import SQLite for database operations
+from tkinter import simpledialog, Toplevel  # Import for date selection dialog and custom date picker dialog
 
 DB_PATH = "d:\\Engineering\\Manish\\manish\\login.db"  # Database path
 
@@ -125,7 +126,7 @@ def add_user():
     username_entry = tk.Entry(add_user_window, width=30)
     password_entry = tk.Entry(add_user_window, width=30, show="*")
     name_entry = tk.Entry(add_user_window, width=30)
-    role_var = tk.StringVar(value="Operator")
+    role_var = tk.StringVar(value="admin")
     role_dropdown = ttk.Combobox(add_user_window, textvariable=role_var, values=["admin"], state="readonly", width=28)
 
     username_entry.grid(row=0, column=1, pady=10, padx=10)
@@ -250,7 +251,7 @@ for text in ["User Logout", "Add User", "Baud Rate", "COM Port"]:
 
 # Right-side buttons
 ttk.Button(menubar, text="User Database", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
-ttk.Button(menubar, text="User Request", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
+ttk.Button(menubar, text="Generate Report", bootstyle='success', padding=(15, 10)).pack(side='right', padx=10, pady=10)
 
 def create_orders_table():
     """Create the orders table in the database if it doesn't exist."""
@@ -347,9 +348,9 @@ tk.Label(order_form_frame, text="Order Date:", bg="white", font=("Arial", 10)).g
 order_date_entry = tk.Entry(order_form_frame, width=15)
 order_date_entry.grid(row=0, column=5, padx=5)
 
-tk.Label(order_form_frame, text="Due Date:", bg="white", font=("Arial", 10)).grid(row=0, column=6, sticky="w", padx=5)
+tk.Label(order_form_frame, text="Due Date:", bg="white", font=("Arial", 10)).grid(row=0, column=7, sticky="w", padx=5)
 due_date_entry = tk.Entry(order_form_frame, width=15)
-due_date_entry.grid(row=0, column=7, padx=5)
+due_date_entry.grid(row=0, column=8, padx=5)
 
 tk.Label(order_form_frame, text="Low Allowed:", bg="white", font=("Arial", 10)).grid(row=1, column=0, sticky="w", padx=5)
 low_allowed_entry = tk.Entry(order_form_frame, width=15)
