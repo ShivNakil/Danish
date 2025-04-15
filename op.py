@@ -4,6 +4,11 @@ import sys
 import sqlite3  # Add this import for database interaction
 import random  # Add this import for generating random values
 import datetime  # Add this import for date and time handling
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "login.db")
+
 try:
     import serial.tools.list_ports
 except ModuleNotFoundError:
@@ -13,14 +18,14 @@ except ModuleNotFoundError:
 class OperatorApp:
     def __init__(self, root, username, name):
         self.root = root
-        self.root.title(f"Operator Screen - {username} {name}")  # Display the name in the title
-        self.root.state("zoomed")  # Open in maximized state
-        self.root.configure(bg="white")
+        self.root.title(f"Operator Dashboard - {username} {name}")
+        self.root.state("zoomed")  # Maximize the window
+        self.root.configure(bg="white")  # Set consistent background color
 
         self.operator_name = name  # Store operator name
 
         # === Top Bar with Username ===
-        self.topbar = tk.Frame(self.root, height=50, bg="#0047ab")
+        self.topbar = tk.Frame(self.root, height=50, bg="#0047AB")  # Updated color
         self.topbar.pack(side="top", fill="x")
 
         self.title_label = tk.Label(
@@ -83,30 +88,49 @@ class OperatorApp:
         self.table_frame = tk.Frame(self.main_area, bg="white")
         self.table_frame.pack(fill="both", expand=True, pady=10)
 
-        # Table columns
-        columns = ["Order ID", "Component Serial Number", "Component Name", "Parameter Name", "Value"]
+        # Table for newly added entries
+        tk.Label(self.table_frame, text="New Entries", font=("Arial", 12, "bold"), bg="white").pack(anchor="w")
+        columns_new = ["Order ID", "Component Serial Number", "Component Name", "Parameter Name", "Value"]
 
-        self.tree = ttk.Treeview(
+        self.tree_new = ttk.Treeview(
             self.table_frame,
-            columns=columns,
+            columns=columns_new,
             show="headings",
-            height=15,
+            height=7,
             selectmode="browse"
         )
 
-        for col in columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=200, anchor="center")
+        for col in columns_new:
+            self.tree_new.heading(col, text=col)
+            self.tree_new.column(col, width=200, anchor="center")
 
-        # Scrollbars
-        vsb = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(self.table_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb_new = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree_new.yview)
+        self.tree_new.configure(yscrollcommand=vsb_new.set)
 
-        # Pack the table and scrollbars
-        self.tree.pack(side="top", fill="both", expand=True)
-        vsb.pack(side="right", fill="y")
-        hsb.pack(side="bottom", fill="x")
+        self.tree_new.pack(side="top", fill="both", expand=True, pady=5)
+        vsb_new.pack(side="right", fill="y")
+
+        # Table for previously fetched entries
+        tk.Label(self.table_frame, text="Previously Fetched Entries", font=("Arial", 12, "bold"), bg="white").pack(anchor="w")
+        columns_prev = ["Order ID", "Component Serial Number", "Component Name", "Parameter Name", "Value"]
+
+        self.tree_prev = ttk.Treeview(
+            self.table_frame,
+            columns=columns_prev,
+            show="headings",
+            height=7,
+            selectmode="browse"
+        )
+
+        for col in columns_prev:
+            self.tree_prev.heading(col, text=col)
+            self.tree_prev.column(col, width=200, anchor="center")
+
+        vsb_prev = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree_prev.yview)
+        self.tree_prev.configure(yscrollcommand=vsb_prev.set)
+
+        self.tree_prev.pack(side="top", fill="both", expand=True, pady=5)
+        vsb_prev.pack(side="right", fill="y")
 
         # Submit Button
         self.submit_button = tk.Button(
@@ -114,6 +138,8 @@ class OperatorApp:
             bg="#28a745", fg="white", command=self.submit_data
         )
         self.submit_button.pack(side="bottom", pady=10)
+
+        self.latest_serial_number = 0  # Initialize the latest serial number
 
     def refresh_com_ports(self):
         """Refresh the COM port dropdown values dynamically."""
@@ -125,7 +151,7 @@ class OperatorApp:
             self.com_port_var.set("No COM Ports Available")
 
     def read_values(self):
-        """Add a row to the table with random values and ensure descending order sorting."""
+        """Add a row to the new entries table with random values."""
         order = self.order_var.get()
         component = self.component_var.get()
         parameter = self.parameter_var.get()
@@ -135,19 +161,16 @@ class OperatorApp:
             messagebox.showerror("Error", "Please select valid Order, Component, and Parameter.")
             return
 
-        # Generate a new component serial number based on the current table entries
-        existing_rows = self.tree.get_children()
-        if existing_rows:
-            max_serial_number = max(int(self.tree.item(row, "values")[1]) for row in existing_rows)
-            new_serial_number = max_serial_number + 1
-        else:
-            new_serial_number = 1
+        # Determine the starting componentSerialNumber
+        if self.tree_prev.get_children() and self.latest_serial_number == 0:
+            # Get the latest componentSerialNumber from the first row of the previously fetched entries
+            self.latest_serial_number = int(self.tree_prev.item(self.tree_prev.get_children()[0], "values")[1])
 
-        # Add a new row to the table
-        self.tree.insert("", 0, values=(order, new_serial_number, component, parameter, value))
+        # Increment the latest serial number
+        self.latest_serial_number += 1
 
-        # Sort the table in descending order by Component Serial Number
-        self.sort_table_by_column("Component Serial Number", descending=True)
+        # Add a new row to the new entries table
+        self.tree_new.insert("", 0, values=(order, self.latest_serial_number, component, parameter, value))
 
     def sort_table_by_column(self, column_name, descending=False):
         """Sort the table by the specified column in ascending or descending order."""
@@ -158,7 +181,7 @@ class OperatorApp:
             self.tree.move(child, "", index)
 
     def populate_previous_entries(self):
-        """Populate the table with previous entries for the selected order, component, and parameter."""
+        """Populate the previously fetched entries table."""
         order = self.order_var.get()
         component = self.component_var.get()
         parameter = self.parameter_var.get()
@@ -170,7 +193,7 @@ class OperatorApp:
             return  # Do nothing if invalid values are selected
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
 
             # Fetch previous entries for the selected order, component, and parameter
@@ -183,17 +206,17 @@ class OperatorApp:
             rows = cursor.fetchall()
             conn.close()
 
-            # Clear the table and populate with previous entries
-            self.tree.delete(*self.tree.get_children())
+            # Clear the previously fetched entries table and populate with previous entries
+            self.tree_prev.delete(*self.tree_prev.get_children())
             for row in rows:
-                self.tree.insert("", "end", values=row)
+                self.tree_prev.insert("", "end", values=row)
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"Error fetching previous entries: {e}")
 
     def populate_orders(self):
         """Populate the Order dropdown."""
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("SELECT orderId FROM orders")
             orders = cursor.fetchall()
@@ -217,7 +240,7 @@ class OperatorApp:
             return
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("SELECT componentName FROM orders WHERE orderId = ?", (order,))
             components = [row[0] for row in cursor.fetchall()]
@@ -242,7 +265,7 @@ class OperatorApp:
             return
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("SELECT parameterName FROM parametersDetails WHERE orderId = ?", (order,))
             parameters = [row[0] for row in cursor.fetchall()]
@@ -261,69 +284,78 @@ class OperatorApp:
 
     def submit_data(self):
         """Submit only newly added rows to the database."""
-        if not self.tree.get_children():
-            messagebox.showerror("Error", "No data to submit.")
+        if not self.tree_new.get_children():
+            messagebox.showerror("Error", "No new data to submit.")
             return
 
-        if not messagebox.askyesno("Confirmation", "Are you sure you want to submit the data?"):
+        if not messagebox.askyesno("Confirmation", "Are you sure you want to submit the new data?"):
             return
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
 
             # Create the table if it doesn't exist
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS measuredValues (
                     orderId TEXT NOT NULL,
-                    componentSerialNumber INTEGER PRIMARY KEY AUTOINCREMENT,
+                    componentSerialNumber INTEGER NOT NULL,
                     componentName TEXT NOT NULL,
                     parameterName TEXT NOT NULL,
                     operatorName TEXT NOT NULL,
                     date TEXT NOT NULL,
                     time TEXT NOT NULL,
                     value REAL NOT NULL,
-                    isValid TEXT NOT NULL
+                    isValid TEXT NOT NULL,
+                    PRIMARY KEY (orderId, componentSerialNumber)
                 )
             """)
 
-            # Insert only rows that are newly added (those with no existing componentSerialNumber)
-            for row in self.tree.get_children():
-                values = self.tree.item(row, "values")
-                order, component_serial_number, component, parameter, measured_value = values
+            # Fetch the maximum componentSerialNumber for each orderId
+            cursor.execute("""
+                SELECT orderId, MAX(componentSerialNumber) 
+                FROM measuredValues 
+                GROUP BY orderId
+            """)
+            max_serial_numbers = {row[0]: row[1] for row in cursor.fetchall()}
 
-                # Check if the row already exists in the database
+            # Insert only rows from the new entries table
+            for row in self.tree_new.get_children():
+                values = self.tree_new.item(row, "values")
+                order, _, component, parameter, measured_value = values
+
+                # Determine the next componentSerialNumber for the order
+                next_serial_number = max_serial_numbers.get(order, 0) + 1
+                max_serial_numbers[order] = next_serial_number
+
+                # Placeholder logic for validity (replace with actual logic based on uploaded image)
+                is_valid = "Valid" if float(measured_value) > 0.5 else "Invalid"
+
+                # Insert the row into the database
                 cursor.execute("""
-                    SELECT COUNT(*)
-                    FROM measuredValues
-                    WHERE orderId = ? AND componentSerialNumber = ?
-                """, (order, component_serial_number))
-                exists = cursor.fetchone()[0]
-
-                if exists == 0:  # Only insert if the row does not already exist
-                    # Placeholder logic for validity (replace with actual logic based on uploaded image)
-                    is_valid = "Valid" if float(measured_value) > 0.5 else "Invalid"
-
-                    # Insert the row into the database
-                    cursor.execute("""
-                        INSERT INTO measuredValues (orderId, componentName, parameterName, operatorName, date, time, value, isValid)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        order,
-                        component,
-                        parameter,
-                        self.operator_name,
-                        datetime.date.today().strftime("%Y-%m-%d"),
-                        datetime.datetime.now().strftime("%H:%M:%S"),
-                        measured_value,
-                        is_valid
-                    ))
+                    INSERT INTO measuredValues (orderId, componentSerialNumber, componentName, parameterName, operatorName, date, time, value, isValid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    order,
+                    next_serial_number,
+                    component,
+                    parameter,
+                    self.operator_name,
+                    datetime.date.today().strftime("%Y-%m-%d"),
+                    datetime.datetime.now().strftime("%H:%M:%S"),
+                    measured_value,
+                    is_valid
+                ))
 
             conn.commit()
             conn.close()
 
             messagebox.showinfo("Success", "New data submitted successfully.")
-            self.tree.delete(*self.tree.get_children())  # Clear the table after submission
+            self.tree_new.delete(*self.tree_new.get_children())  # Clear the new entries table after submission
+
+            # Call populate_previous_entries to refresh the previously fetched entries table
+            self.populate_previous_entries()
+
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"Error submitting data: {e}")
 

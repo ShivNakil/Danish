@@ -2,20 +2,24 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
 import sqlite3  # Add this import for database interaction
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 class HamburgerMenuApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Excel-like Table with Burger Menu")
-        self.root.geometry("1200x700")
-        self.root.configure(bg="white")
+        self.root.state("zoomed")  # Maximize the window
+        self.root.configure(bg="white")  # Set consistent background color
         self.root.minsize(800, 600)
 
         self.menu_visible = False
         self.menu_width = 250
 
         # === Top bar ===
-        self.topbar = tk.Frame(self.root, height=50, bg="#0047ab")
+        self.topbar = tk.Frame(self.root, height=50, bg="#0047AB")  # Updated color
         self.topbar.pack(side="top", fill="x")
 
         self.menu_button = tk.Button(
@@ -30,7 +34,7 @@ class HamburgerMenuApp:
         self.main_area.pack(fill="both", expand=True)
 
         # === Side Menu (initially hidden) ===
-        self.menu_frame = tk.Frame(self.main_area, width=0, bg="#003d99")
+        self.menu_frame = tk.Frame(self.main_area, width=0, bg="#0047AB")  # Updated color
         self.menu_frame.pack(side="left", fill="y")
         self.menu_frame.pack_propagate(False)
         self.setup_menu_content()
@@ -217,7 +221,7 @@ class HamburgerMenuApp:
     def populate_orders(self):
         """Populate the Order dropdown on page load."""
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
             cursor = conn.cursor()
             cursor.execute("SELECT orderId FROM orders")
             orders = cursor.fetchall()
@@ -241,7 +245,7 @@ class HamburgerMenuApp:
             return
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
             cursor = conn.cursor()
             
             # Fetch components for the selected order
@@ -267,7 +271,7 @@ class HamburgerMenuApp:
             return
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
             cursor = conn.cursor()
             # Fetch parameters for the selected order
             print((order,))
@@ -296,7 +300,7 @@ class HamburgerMenuApp:
             return
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -349,12 +353,12 @@ class HamburgerMenuApp:
     def logout(self):
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
             self.root.destroy()
-            subprocess.Popen(["python", "d:\\Engineering\\manish\\Manish\\login.py"])  # Relaunch login screen
+            subprocess.Popen(["python", os.path.join(BASE_DIR, "login.py")])
 
     def populate_table(self):
         """Fetch and display data in the main frame table."""
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
             cursor = conn.cursor()
             # Join orders and parametersDetails tables to fetch required data
             query = """
@@ -413,7 +417,7 @@ class HamburgerMenuApp:
             return
 
         try:
-            conn = sqlite3.connect("d:\\Engineering\\Manish\\manish\\login.db")  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
             cursor = conn.cursor()
             # Update the database
             cursor.execute(

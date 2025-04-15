@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 import sqlite3  # Use SQLite instead of pyodbc
+import os
+
 try:
     import serial.tools.list_ports  # Import for COM port detection
 except ModuleNotFoundError:
@@ -8,7 +10,8 @@ except ModuleNotFoundError:
     exit()
 
 # DB config
-DB_PATH = "d:\\Engineering\\Manish\\manish\\login.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 def connect_db():
     try:
@@ -21,8 +24,8 @@ def connect_db():
 # ---------- GUI ----------
 root = tk.Tk()
 root.title("Admin Dashboard - User Management")
-root.geometry("900x600")
-root.config(bg="white")
+root.state("zoomed")  # Maximize the window
+root.config(bg="white")  # Set consistent background color
 
 # ---------- Colors ----------
 BLUE1 = "#0047AB"
@@ -89,7 +92,7 @@ def logout_user():
     if confirm:
         root.destroy()
         import subprocess
-        subprocess.Popen(["python", "d:\\Engineering\\Manish\\manish\\login.py"])
+        subprocess.Popen(["python", os.path.join(BASE_DIR, "login.py")])
         # messagebox.showinfo("Logged Out", "You have been logged out successfully.")
 
 def refresh_com_ports():
@@ -121,7 +124,7 @@ for text in ["User Logout", "Add User", "Baud Rate", "COM Port"]:
     else:
         command = dummy_action
 
-    tk.Button(sidebar, text=text, bg=BLUE2, fg=WHITE, font=("Arial", 10, "bold"),
+    tk.Button(sidebar, text=text, bg='#0047AB', fg='white', font=("Arial", 10, "bold"),  # Updated color
               relief="flat", height=2, command=command).pack(fill="x", padx=10, pady=8)
 
 # ---------- User Form ----------

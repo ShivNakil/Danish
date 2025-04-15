@@ -7,7 +7,8 @@ import os  # Import os for running external scripts
 import sqlite3  # Import SQLite for database operations
 from tkinter import simpledialog, Toplevel  # Import for date selection dialog and custom date picker dialog
 
-DB_PATH = "d:\\Engineering\\Manish\\manish\\login.db"  # Database path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 def connect_db():
     """Connect to the SQLite database."""
@@ -35,9 +36,9 @@ def on_resize(event):
                 widget.pack(side='right', padx=10, pady=10)
 
 root = tk.Tk()
-root.title("Dashboard UI")
-root.geometry("1200x800")
-root.minsize(800, 600)
+root.title("Manufacturer Dashboard")
+root.state("zoomed")  # Maximize the window
+root.configure(bg="white")  # Set consistent background color
 style = Style("cosmo")
 
 # Configure grid for responsive layout
@@ -45,7 +46,7 @@ root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(1, weight=1)
 
 # Sidebar with blue background
-sidebar = tk.Frame(root, bg='#0047ab', width=250)  # Ensure the background is blue
+sidebar = tk.Frame(root, bg='#0047AB', width=250)  # Updated color to match other files
 sidebar.grid(row=0, column=0, sticky='ns')  # Sidebar aligned to the left
 sidebar.grid_propagate(False)
 
@@ -76,7 +77,7 @@ main_frame.grid_rowconfigure(1, weight=1)  # Ensure the table container row take
 main_frame.grid_columnconfigure(0, weight=1)
 
 # Menubar with blue background
-menubar = tk.Frame(main_frame, bg='#0047ab', height=80)
+menubar = tk.Frame(main_frame, bg='#0047AB', height=80)  # Updated color
 menubar.grid(row=0, column=0, sticky='ew', pady=0)  # Remove any padding above the menu
 menubar.grid_propagate(False)
 
