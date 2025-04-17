@@ -3,8 +3,14 @@ from tkinter import ttk, messagebox
 import subprocess
 import sqlite3  # Add this import for database interaction
 import os
+import sys  # Ensure sys is imported
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Update database path to handle PyInstaller's temporary directory
+if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller bundle
+    BASE_DIR = sys._MEIPASS  # Temporary directory created by PyInstaller
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 class HamburgerMenuApp:
@@ -60,58 +66,54 @@ class HamburgerMenuApp:
             btn.bind("<Leave>", lambda e: btn.config(bg="#007bff"))
             return btn
 
-        # Removed "Create User" button
         create_rounded_btn(self.menu_inner, "Report Generation", self.generate_report).pack(pady=10, fill='x')
         create_rounded_btn(self.menu_inner, "User Logout", self.logout).pack(pady=10, fill='x')
+        create_rounded_btn(self.menu_inner, "Communication", self.open_com_port_popup).pack(pady=10, fill='x')
 
-        settings_frame = tk.LabelFrame(
-            self.menu_inner, text="Settings", bg="#003d99", fg="white",
-            font=("Arial", 11, "bold"), bd=1, padx=10, pady=10,
-            relief="flat", highlightbackground="#007bff", highlightthickness=1
-        )
-        settings_frame.pack(pady=20, fill='both')
+    def open_com_port_popup(self):
+        """Open a popup window for Baud Rate and COM Port settings."""
+        popup = tk.Toplevel(self.root)
+        popup.title("Communication")
+        popup.geometry("300x200")
+        popup.configure(bg="white")
 
-        # Baud Rate Field
-        tk.Label(settings_frame, text="Baud Rate:", bg="#003d99", fg="white", font=("Arial", 10)).pack(anchor="w", pady=5)
-        self.baud_rate_var = tk.StringVar()
-        self.baud_rate_entry = tk.Entry(settings_frame, textvariable=self.baud_rate_var, width=20)
-        self.baud_rate_entry.pack(fill="x", pady=5)
+        tk.Label(popup, text="Baud Rate:", bg="white", font=("Arial", 10)).pack(anchor="w", pady=5, padx=10)
+        baud_rate_var = tk.StringVar()
+        baud_rate_entry = tk.Entry(popup, textvariable=baud_rate_var, width=20)
+        baud_rate_entry.pack(fill="x", padx=10, pady=5)
 
-        # COM Port Dropdown
-        tk.Label(settings_frame, text="COM Port:", bg="#003d99", fg="white", font=("Arial", 10)).pack(anchor="w", pady=5)
-        self.com_port_var = tk.StringVar(value="Select COM Port")
-        self.com_port_dropdown = ttk.Combobox(settings_frame, textvariable=self.com_port_var, state="readonly", width=18)
-        self.com_port_dropdown.pack(fill="x", pady=5)
-        self.refresh_com_ports()
+        tk.Label(popup, text="COM Port:", bg="white", font=("Arial", 10)).pack(anchor="w", pady=5, padx=10)
+        com_port_var = tk.StringVar(value="Select COM Port")
+        com_port_dropdown = ttk.Combobox(popup, textvariable=com_port_var, state="readonly", width=18)
+        com_port_dropdown.pack(fill="x", padx=10, pady=5)
 
-        # Save Button
-        tk.Button(
-            settings_frame, text="Save Settings", font=("Arial", 11),
-            bg="#0047ab", fg="white", relief="flat", bd=0,
-            activebackground="#3366cc", padx=8, pady=6, highlightthickness=0,
-            command=self.save_settings
-        ).pack(fill='x', pady=10)
-
-    def refresh_com_ports(self):
-        """Refresh the COM port dropdown values dynamically."""
+        # Populate COM ports
         try:
             import serial.tools.list_ports
             com_ports = [port.device for port in serial.tools.list_ports.comports()]
-            self.com_port_dropdown["values"] = com_ports
+            com_port_dropdown["values"] = com_ports
             if com_ports:
-                self.com_port_var.set(com_ports[0])  # Set the first COM port as default
+                com_port_var.set(com_ports[0])  # Set the first COM port as default
             else:
-                self.com_port_var.set("No COM Ports Available")
+                com_port_var.set("No COM Ports Available")
         except ModuleNotFoundError:
-            self.com_port_var.set("pyserial not installed")
+            com_port_var.set("pyserial not installed")
 
-    def save_settings(self):
-        baud_rate = self.baud_rate_var.get()
-        com_port = self.com_port_var.get()
-        if not baud_rate or com_port == "Select COM Port" or com_port == "No COM Ports Available":
-            messagebox.showerror("Error", "Please enter a valid Baud Rate and select a COM Port.")
-        else:
-            messagebox.showinfo("Settings Saved", f"Baud Rate: {baud_rate}\nCOM Port: {com_port}")
+        def save_settings():
+            baud_rate = baud_rate_var.get()
+            com_port = com_port_var.get()
+            if not baud_rate or com_port == "Select COM Port" or com_port == "No COM Ports Available":
+                messagebox.showerror("Error", "Please enter a valid Baud Rate and select a COM Port.")
+            else:
+                messagebox.showinfo("Settings Saved", f"Baud Rate: {baud_rate}\nCOM Port: {com_port}")
+                popup.destroy()
+
+        tk.Button(
+            popup, text="Save Settings", font=("Arial", 11),
+            bg="#0047ab", fg="white", relief="flat", bd=0,
+            activebackground="#3366cc", padx=8, pady=6, highlightthickness=0,
+            command=save_settings
+        ).pack(fill='x', pady=10, padx=10)
 
     def toggle_menu(self):
         if self.menu_visible:
@@ -133,19 +135,19 @@ class HamburgerMenuApp:
         control_frame = tk.Frame(self.table_frame, bg="white")
         control_frame.pack(fill="x", pady=10)
 
-        # Order Dropdown
-        tk.Label(control_frame, text="Order:", bg="white", font=("Arial", 10)).pack(side="left", padx=5)
-        self.order_var = tk.StringVar(value="Select Order")
-        self.order_dropdown = ttk.Combobox(control_frame, textvariable=self.order_var, state="readonly", width=20)
-        self.order_dropdown.pack(side="left", padx=5)
-        self.order_dropdown.bind("<<ComboboxSelected>>", self.populate_components)
-
         # Component Dropdown
         tk.Label(control_frame, text="Component:", bg="white", font=("Arial", 10)).pack(side="left", padx=5)
         self.component_var = tk.StringVar(value="Select Component")
         self.component_dropdown = ttk.Combobox(control_frame, textvariable=self.component_var, state="readonly", width=20)
         self.component_dropdown.pack(side="left", padx=5)
-        self.component_dropdown.bind("<<ComboboxSelected>>", self.populate_parameters)
+        self.component_dropdown.bind("<<ComboboxSelected>>", self.populate_part_numbers)
+
+        # Part Number Dropdown
+        tk.Label(control_frame, text="Part Number:", bg="white", font=("Arial", 10)).pack(side="left", padx=5)
+        self.part_number_var = tk.StringVar(value="Select Part Number")
+        self.part_number_dropdown = ttk.Combobox(control_frame, textvariable=self.part_number_var, state="readonly", width=20)
+        self.part_number_dropdown.pack(side="left", padx=5)
+        self.part_number_dropdown.bind("<<ComboboxSelected>>", self.populate_parameters)
 
         # Parameter Dropdown
         tk.Label(control_frame, text="Parameter:", bg="white", font=("Arial", 10)).pack(side="left", padx=5)
@@ -219,42 +221,16 @@ class HamburgerMenuApp:
         update_button.pack(side="bottom", pady=10)
 
     def populate_orders(self):
-        """Populate the Order dropdown on page load."""
+        """Populate the Component dropdown on page load."""
         try:
-            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            cursor.execute("SELECT orderId FROM orders")
-            orders = cursor.fetchall()
-            conn.close()
-
-            if orders:
-                self.order_dropdown["values"] = [order[0] for order in orders]
-                self.order_var.set("Select Order")
-            else:
-                self.order_dropdown["values"] = []
-                self.order_var.set("No Orders Available")
-        except sqlite3.Error as e:
-            messagebox.showerror("Database Error", f"Error fetching orders: {e}")
-
-    def populate_components(self, event=None):
-        """Populate the Component dropdown based on the selected Order."""
-        order = self.order_var.get()
-        if order == "Select Order" or order == "No Orders Available":
-            self.component_dropdown["values"] = []
-            self.component_var.set("Select Component")
-            return
-
-        try:
-            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
-            cursor = conn.cursor()
-            
-            # Fetch components for the selected order
-            cursor.execute("SELECT componentName FROM orders WHERE orderId = ?", (order,))
-            components = [row[0] for row in cursor.fetchall()]
+            cursor.execute("SELECT DISTINCT componentName FROM orders")
+            components = cursor.fetchall()
             conn.close()
 
             if components:
-                self.component_dropdown["values"] = components
+                self.component_dropdown["values"] = [component[0] for component in components]
                 self.component_var.set("Select Component")
             else:
                 self.component_dropdown["values"] = []
@@ -262,20 +238,61 @@ class HamburgerMenuApp:
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"Error fetching components: {e}")
 
+    def populate_part_numbers(self, event=None):
+        """Populate the Part Number dropdown based on the selected Component."""
+        component = self.component_var.get()
+        if component == "Select Component" or component == "No Components Available":
+            self.part_number_dropdown["values"] = []
+            self.part_number_var.set("Select Part Number")
+            return
+
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT partNumber FROM orders WHERE componentName = ?", (component,))
+            part_numbers = [row[0] for row in cursor.fetchall()]
+            conn.close()
+
+            if part_numbers:
+                self.part_number_dropdown["values"] = part_numbers
+                self.part_number_var.set("Select Part Number")
+            else:
+                self.part_number_dropdown["values"] = []
+                self.part_number_var.set("No Part Numbers Available")
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error fetching part numbers: {e}")
+
     def populate_parameters(self, event=None):
-        """Populate the Parameter dropdown based on the selected Order."""
-        order = self.order_var.get()
-        if order == "Select Order" or order == "No Orders Available":
+        """Populate the Parameter dropdown based on the selected Component and Part Number."""
+        component = self.component_var.get()
+        part_number = self.part_number_var.get()
+        if component == "Select Component" or part_number == "Select Part Number":
             self.parameter_dropdown["values"] = []
             self.parameter_var.set("Select Parameter")
             return
 
         try:
-            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            # Fetch parameters for the selected order
-            print((order,))
-            cursor.execute("SELECT parameterName FROM parametersDetails WHERE orderId = ?", (order,))
+            # Fetch orderId for the selected component and part number
+            cursor.execute(
+                "SELECT orderId FROM orders WHERE componentName = ? AND partNumber = ?",
+                (component, part_number)
+            )
+            result = cursor.fetchone()
+            if not result:
+                self.parameter_dropdown["values"] = []
+                self.parameter_var.set("No Parameters Available")
+                conn.close()
+                return
+
+            order_id = result[0]
+
+            # Fetch parameters for the selected orderId
+            cursor.execute(
+                "SELECT parameterName FROM parametersDetails WHERE orderId = ?",
+                (order_id,)
+            )
             parameters = [row[0] for row in cursor.fetchall()]
             conn.close()
 
@@ -290,30 +307,45 @@ class HamburgerMenuApp:
 
     def save_parameter_values(self):
         """Save the selected parameter's low and high values to the database."""
+        component = self.component_var.get()
+        part_number = self.part_number_var.get()
         parameter = self.parameter_var.get()
         low_value = self.low_value_var.get()
         high_value = self.high_value_var.get()
-        order_id = self.order_var.get()
 
-        if parameter == "Select Parameter" or not low_value or not high_value or order_id == "Select Order":
-            messagebox.showerror("Error", "Please select a valid Order, Parameter, and enter valid values.")
+        if component == "Select Component" or part_number == "Select Part Number" or parameter == "Select Parameter" or not low_value or not high_value:
+            messagebox.showerror("Error", "Please select valid Component, Part Number, Parameter, and enter valid values.")
             return
 
         try:
-            conn = sqlite3.connect(DB_PATH)  # Ensure this path is correct
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
+            # Fetch orderId for the selected component and part number
+            cursor.execute(
+                "SELECT orderId FROM orders WHERE componentName = ? AND partNumber = ?",
+                (component, part_number)
+            )
+            result = cursor.fetchone()
+            if not result:
+                messagebox.showerror("Error", "Invalid Component or Part Number selection.")
+                conn.close()
+                return
+
+            order_id = result[0]
+
+            # Update the parametersDetails table
             cursor.execute(
                 """
                 UPDATE parametersDetails
                 SET low = ?, high = ?
-                WHERE parameterName = ? AND orderId = ?
+                WHERE orderId = ? AND parameterName = ?
                 """,
-                (low_value, high_value, parameter, order_id)
+                (low_value, high_value, order_id, parameter)
             )
             conn.commit()
             conn.close()
 
-            messagebox.showinfo("Values Saved", f"Order ID: {order_id}\nParameter: {parameter}\nLow Value: {low_value}\nHigh Value: {high_value}")
+            messagebox.showinfo("Values Saved", f"Component: {component}\nPart Number: {part_number}\nParameter: {parameter}\nLow Value: {low_value}\nHigh Value: {high_value}")
             self.populate_table()  # Refresh the table
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"Error saving parameter values: {e}")
@@ -392,7 +424,6 @@ class HamburgerMenuApp:
             return
 
         # Populate dropdowns and input fields
-        self.order_var.set(values[0])
         self.component_var.set(values[1])
         self.parameter_var.set(values[2])
         self.low_value_var.set(values[3])

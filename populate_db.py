@@ -1,7 +1,13 @@
 import sqlite3
 import os
+import sys  # Ensure sys is imported
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Update database path to handle PyInstaller's temporary directory
+if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller bundle
+    BASE_DIR = sys._MEIPASS  # Temporary directory created by PyInstaller
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 # Connect to the database

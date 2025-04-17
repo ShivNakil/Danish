@@ -2,6 +2,15 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import sqlite3  # Use SQLite instead of pyodbc
 import os
+import sys  # Ensure sys is imported
+
+# Update database path to handle PyInstaller's temporary directory
+if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller bundle
+    BASE_DIR = sys._MEIPASS  # Temporary directory created by PyInstaller
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 try:
     import serial.tools.list_ports  # Import for COM port detection
@@ -63,7 +72,6 @@ def toggle_sidebar():
         main_area.pack_forget()
         main_area.pack(side="left", fill="both", expand=True)
         sidebar_visible = True
-        refresh_com_ports()  # Refresh COM ports when showing the sidebar
 
 burger_btn = tk.Button(top_bar, text="☰", font=("Arial", 14, "bold"), bg=BLUE2, fg=WHITE,
                       relief="flat", command=toggle_sidebar)
@@ -95,32 +103,12 @@ def logout_user():
         subprocess.Popen(["python", os.path.join(BASE_DIR, "login.py")])
         # messagebox.showinfo("Logged Out", "You have been logged out successfully.")
 
-def refresh_com_ports():
-    """Refresh the COM port dropdown values dynamically."""
-    com_ports = [port.device for port in serial.tools.list_ports.comports()]
-    com_port_dropdown["values"] = com_ports
-    if com_ports:
-        com_port_var.set(com_ports[0])  # Set the first COM port as default
-    else:
-        com_port_var.set("No COM Ports Available")
-
 # Sidebar Buttons with Input Fields
-for text in ["User Logout", "Add User", "Baud Rate", "COM Port"]:
+for text in ["User Logout", "Add User"]:
     if text == "User Logout":
         command = logout_user
     elif text == "Add User":
         command = show_user_interface
-    elif text == "Baud Rate":
-        baud_rate_var = tk.StringVar()
-        baud_rate_entry = tk.Entry(sidebar, textvariable=baud_rate_var, width=20)
-        baud_rate_entry.pack(fill="x", padx=10, pady=2)
-        command = lambda: messagebox.showinfo("Info", f"Baud Rate set to {baud_rate_var.get()}")
-    elif text == "COM Port":
-        com_port_var = tk.StringVar(value="Select COM Port")
-        com_port_dropdown = ttk.Combobox(sidebar, textvariable=com_port_var, state="readonly", width=18)
-        com_port_dropdown.pack(fill="x", padx=10, pady=2)
-        refresh_com_ports()  # Refresh COM ports when the dropdown is created
-        command = lambda: messagebox.showinfo("Info", f"COM Port selected: {com_port_var.get()}")
     else:
         command = dummy_action
 
@@ -297,20 +285,40 @@ def on_tree_select(event):
 
 tree.bind("<<TreeviewSelect>>", on_tree_select)
 
-# ---------- Baud Rate Frame ----------
-baud_rate_frame = tk.Frame(main_area, bg=WHITE)
-tk.Label(baud_rate_frame, text="Enter Baud Rate:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=0, column=0, sticky="e", pady=5)
-baud_rate_entry = tk.Entry(baud_rate_frame, width=30)
-baud_rate_entry.grid(row=0, column=1, padx=10)
-tk.Button(baud_rate_frame, text="Save", bg=BLUE2, fg=WHITE, width=12, command=lambda: messagebox.showinfo("Info", f"Baud Rate set to {baud_rate_entry.get()}")).grid(row=1, column=0, columnspan=2, pady=10)
+# ---------- Baud Rate and COM Port Popup ----------
+def open_baud_com_popup():
+    """Open a popup window for Baud Rate and COM Port settings."""
+    popup = tk.Toplevel(root)
+    popup.title("Baud Rate and COM Port Settings")
+    popup.geometry("300x200")
+    popup.config(bg=WHITE)
 
-# ---------- COM Port Frame ----------
-com_port_frame = tk.Frame(main_area, bg=WHITE)
-tk.Label(com_port_frame, text="Select COM Port:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=0, column=0, sticky="e", pady=5)
-com_port_var = tk.StringVar(value="Select COM Port")
-com_port_dropdown = ttk.Combobox(com_port_frame, textvariable=com_port_var, state="readonly", width=28)
-com_port_dropdown.grid(row=0, column=1, padx=10)
-tk.Button(com_port_frame, text="Save", bg=BLUE2, fg=WHITE, width=12, command=lambda: messagebox.showinfo("Info", f"COM Port selected: {com_port_var.get()}")).grid(row=1, column=0, columnspan=2, pady=10)
+    tk.Label(popup, text="Enter Baud Rate:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=0, column=0, sticky="e", pady=10, padx=10)
+    baud_rate_var = tk.StringVar()
+    baud_rate_entry = tk.Entry(popup, textvariable=baud_rate_var, width=20)
+    baud_rate_entry.grid(row=0, column=1, padx=10)
+
+    tk.Label(popup, text="Select COM Port:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=1, column=0, sticky="e", pady=10, padx=10)
+    com_port_var = tk.StringVar(value="Select COM Port")
+    com_port_dropdown = ttk.Combobox(popup, textvariable=com_port_var, state="readonly", width=18)
+    com_port_dropdown.grid(row=1, column=1, padx=10)
+    refresh_com_ports_dropdown(com_port_dropdown, com_port_var)
+
+    tk.Button(popup, text="Save", bg=BLUE2, fg=WHITE, width=12, 
+              command=lambda: messagebox.showinfo("Info", f"Baud Rate: {baud_rate_var.get()}, COM Port: {com_port_var.get()}")).grid(row=2, column=0, columnspan=2, pady=20)
+
+def refresh_com_ports_dropdown(dropdown, var):
+    """Refresh the COM port dropdown values dynamically."""
+    com_ports = [port.device for port in serial.tools.list_ports.comports()]
+    dropdown["values"] = com_ports
+    if com_ports:
+        var.set(com_ports[0])  # Set the first COM port as default
+    else:
+        var.set("No COM Ports Available")
+
+# Add a button to open the popup in the sidebar
+tk.Button(sidebar, text="Communication", bg='#0047AB', fg='white', font=("Arial", 10, "bold"),
+          relief="flat", height=2, command=open_baud_com_popup).pack(fill="x", padx=10, pady=8)
 
 hide_user_interface() 
 refresh_users()

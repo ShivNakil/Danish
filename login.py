@@ -3,11 +3,14 @@ from tkinter import messagebox
 import subprocess
 import sqlite3  # Import SQLite library
 import os
+import sys  # Ensure sys is imported
 
-# Get the base directory of the executable or script
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Update database path to handle PyInstaller's temporary directory
+if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller bundle
+    BASE_DIR = sys._MEIPASS  # Temporary directory created by PyInstaller
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Update database path
 DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 # Main application window

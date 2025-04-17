@@ -6,8 +6,14 @@ import serial  # Import pyserial for interaction with COM ports
 import os  # Import os for running external scripts
 import sqlite3  # Import SQLite for database operations
 from tkinter import simpledialog, Toplevel  # Import for date selection dialog and custom date picker dialog
+import sys  # Ensure sys is imported
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Update database path to handle PyInstaller's temporary directory
+if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller bundle
+    BASE_DIR = sys._MEIPASS  # Temporary directory created by PyInstaller
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 def connect_db():
@@ -115,7 +121,7 @@ def add_user():
     """Add a new user to the database and display the user table."""
     add_user_window = tk.Toplevel(root)
     add_user_window.title("Add User")
-    add_user_window.geometry("600x500")
+    add_user_window.geometry("900x500")
     add_user_window.config(bg="white")
 
     # Add User Form
@@ -206,7 +212,7 @@ def refresh_com_ports():
     """Refresh the COM port dropdown values dynamically."""
     com_ports = [port.device for port in serial.tools.list_ports.comports()]
     com_port_dropdown["values"] = com_ports
-    if com_ports:
+    if (com_ports):
         com_port_var.set(com_ports[0])  # Set the first COM port as default
     else:
         com_port_var.set("No COM Ports Available")
@@ -225,25 +231,60 @@ def connect_to_com_port():
     except ValueError:
         messagebox.showerror("Error", "Invalid Baud Rate. Please enter a valid number.")
 
-for text in ["User Logout", "Add User", "Baud Rate", "COM Port"]:
+def open_com_port_popup():
+    """Open a popup window for setting baud rate and COM port."""
+    popup = Toplevel(root)
+    popup.title("COM Port Settings")
+    popup.geometry("400x300")
+    popup.config(bg="white")
+
+    tk.Label(popup, text="Baud Rate:", bg="white", font=("Arial", 10)).pack(pady=10)
+    baud_rate_var = tk.StringVar()
+    baud_rate_entry = tk.Entry(popup, textvariable=baud_rate_var, width=20)
+    baud_rate_entry.pack(pady=5)
+
+    tk.Label(popup, text="COM Port:", bg="white", font=("Arial", 10)).pack(pady=10)
+    com_port_var = tk.StringVar(value="Select COM Port")
+    com_port_dropdown = ttk.Combobox(popup, textvariable=com_port_var, state="readonly", width=18)
+    com_port_dropdown.pack(pady=5)
+
+    def refresh_com_ports():
+        """Refresh the COM port dropdown values dynamically."""
+        com_ports = [port.device for port in serial.tools.list_ports.comports()]
+        com_port_dropdown["values"] = com_ports
+        if com_ports:
+            com_port_var.set(com_ports[0])  # Set the first COM port as default
+        else:
+            com_port_var.set("No COM Ports Available")
+
+    refresh_com_ports()
+
+    def connect_to_com_port():
+        """Connect to the selected COM port and display a message."""
+        selected_port = com_port_var.get()
+        if selected_port == "No COM Ports Available" or not selected_port:
+            messagebox.showerror("Error", "No valid COM port selected.")
+            return
+        try:
+            with serial.Serial(selected_port, baudrate=int(baud_rate_var.get()), timeout=1) as ser:
+                messagebox.showinfo("Success", f"Connected to {selected_port} at {ser.baudrate} baud.")
+        except serial.SerialException as e:
+            messagebox.showerror("Error", f"Failed to connect to {selected_port}: {e}")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid Baud Rate. Please enter a valid number.")
+
+    tk.Button(popup, text="Connect", bg="#28A745", fg="white", font=("Arial", 10), command=connect_to_com_port).pack(pady=10)
+    tk.Button(popup, text="Refresh Ports", bg="#007BFF", fg="white", font=("Arial", 10), command=refresh_com_ports).pack(pady=5)
+
+# Add a button to open the popup in the sidebar
+tk.Button(sidebar, text="Communication", bg='#003f7d', fg='white', font=("Arial", 10, "bold"),
+          relief="flat", height=2, command=open_com_port_popup).pack(fill="x", padx=10, pady=8)
+
+for text in ["User Logout", "Add User"]:
     if text == "User Logout":
         command = logout_user
     elif text == "Add User":
         command = add_user
-    elif text == "Baud Rate":
-        baud_rate_var = tk.StringVar()
-        baud_rate_entry = tk.Entry(sidebar, textvariable=baud_rate_var, width=20)
-        baud_rate_entry.pack(fill="x", padx=10, pady=2)
-        command = set_baud_rate
-    elif text == "COM Port":
-        com_port_var = tk.StringVar(value="Select COM Port")
-        com_port_dropdown = ttk.Combobox(sidebar, textvariable=com_port_var, state="readonly", width=18)
-        com_port_dropdown.pack(fill="x", padx=10, pady=2)
-        refresh_com_ports()  # Refresh COM ports when the dropdown is created
-        connect_button = tk.Button(sidebar, text="Connect", bg='#003f7d', fg='white', font=("Arial", 10, "bold"),
-                                    relief="flat", height=2, command=connect_to_com_port)
-        connect_button.pack(fill="x", padx=10, pady=4)
-        command = lambda: messagebox.showinfo("Info", f"COM Port selected: {com_port_var.get()}")
     else:
         command = dummy_action
 
@@ -252,6 +293,7 @@ for text in ["User Logout", "Add User", "Baud Rate", "COM Port"]:
 
 # Right-side buttons
 ttk.Button(menubar, text="User Database", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
+ttk.Button(menubar, text="Main Database", bootstyle='secondary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
 ttk.Button(menubar, text="Generate Report", bootstyle='success', padding=(15, 10)).pack(side='right', padx=10, pady=10)
 
 def create_orders_table():
@@ -262,15 +304,10 @@ def create_orders_table():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 orderId INTEGER PRIMARY KEY AUTOINCREMENT,
-                orderBy TEXT NOT NULL,
                 componentName TEXT NOT NULL,
-                orderDate TEXT NOT NULL,
-                dueDate TEXT NOT NULL,
-                lowAllowed INTEGER NOT NULL,
-                peakAllowed INTEGER NOT NULL,
-                quantity INTEGER NOT NULL
+                partNumber TEXT NOT NULL
             )
-        """)
+        """)  # Added partNumber column
         con.commit()
         con.close()
 
@@ -296,51 +333,67 @@ def create_parameters_table():
 
 create_parameters_table()  # Ensure the table exists
 
-def submit_order():
-    """Submit a new order to the database."""
-    order_by = order_by_entry.get().strip()
+def submit_order_and_save_parameters():
+    """Submit a new order and save associated parameters."""
     component_name = component_name_entry.get().strip()
-    order_date = order_date_entry.get().strip()
-    due_date = due_date_entry.get().strip()
-    low_allowed = low_allowed_entry.get().strip()
-    peak_allowed = peak_allowed_entry.get().strip()
-    quantity = quantity_entry.get().strip()
+    part_number = part_number_entry.get().strip()  # Get part number input
 
-    if not all([order_by, component_name, order_date, due_date, low_allowed, peak_allowed, quantity]):
-        messagebox.showerror("Error", "All fields are required.")
-        return
-
-    try:
-        low_allowed = float(low_allowed)  # Allow float values
-        peak_allowed = float(peak_allowed)  # Allow float values
-        quantity = int(quantity)
-    except ValueError:
-        messagebox.showerror("Error", "Low Allowed and Peak Allowed must be numbers, and Quantity must be an integer.")
+    if not component_name or not part_number:
+        messagebox.showerror("Error", "Component Name and Part Number are required.")
         return
 
     con = connect_db()
     if con:
         cursor = con.cursor()
         cursor.execute("""
-            INSERT INTO orders (orderBy, componentName, orderDate, dueDate, lowAllowed, peakAllowed, quantity)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (order_by, component_name, order_date, due_date, low_allowed, peak_allowed, quantity))
+            INSERT INTO orders (componentName, partNumber)
+            VALUES (?, ?)
+        """, (component_name, part_number))  # Save part number
+        con.commit()
+
+        # Fetch the order ID of the newly inserted component
+        cursor.execute("SELECT orderId FROM orders WHERE componentName = ? AND partNumber = ?", (component_name, part_number))
+        order = cursor.fetchone()
+        if not order:
+            messagebox.showerror("Error", "Failed to retrieve the order ID.")
+            con.close()
+            return
+
+        order_id = order[0]
+
+        # Save parameters associated with the component
+        for parameter_name_entry in parameter_entries:
+            parameter_name = parameter_name_entry[0].get().strip()
+
+            if not parameter_name:
+                messagebox.showerror("Error", "Parameter Name is required.")
+                con.close()
+                return
+
+            try:
+                cursor.execute("""
+                    INSERT INTO parametersDetails (orderId, parameterName)
+                    VALUES (?, ?)
+                """, (order_id, parameter_name))
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save parameter: {e}")
+                con.close()
+                return
+
         con.commit()
         con.close()
-        messagebox.showinfo("Success", "Order submitted successfully!")
+        messagebox.showinfo("Success", "Component, part number, and parameters saved successfully!")
         refresh_orders()
         clear_order_form()
 
 def clear_order_form():
     """Clear the order input form."""
-    order_by_entry.delete(0, tk.END)
     component_name_entry.delete(0, tk.END)
-    order_date_entry.delete(0, tk.END)
-    due_date_entry.delete(0, tk.END)
-    low_allowed_entry.delete(0, tk.END)
-    peak_allowed_entry.delete(0, tk.END)
-    quantity_entry.delete(0, tk.END)
+    part_number_entry.delete(0, tk.END)  # Clear part number field
+    for parameter_name_entry in parameter_entries:
+        parameter_name_entry[0].delete(0, tk.END)
 
+# Update references to "Order ID" in the refresh_orders function
 def refresh_orders():
     """Fetch and display all orders in the table."""
     for row in orders_tree.get_children():
@@ -348,178 +401,86 @@ def refresh_orders():
     con = connect_db()
     if con:
         cursor = con.cursor()
-        cursor.execute("SELECT * FROM orders")
-        for row in cursor.fetchall():
-            orders_tree.insert("", "end", values=row)
+        cursor.execute("SELECT orderId, componentName, partNumber FROM orders")
+        orders = cursor.fetchall()
+
+        for order in orders:
+            serial_number, component_name, part_number = order  # Rename order_id to serial_number
+            # Fetch parameters for the order and format them with high and low values
+            cursor.execute("""
+                SELECT parameterName, low, high
+                FROM parametersDetails
+                WHERE orderId = ?
+            """, (serial_number,))
+            parameters = [
+                f"{param[0]} ({param[1]}, {param[2]})" for param in cursor.fetchall()
+            ]
+            parameters_list = ", ".join(parameters)
+
+            # Insert the row with parameters into the table
+            orders_tree.insert("", "end", values=(serial_number, component_name, part_number, parameters_list))
         con.close()
 
-def view_order():
-    """View the details of the selected order in a new frame."""
-    selected_item = orders_tree.selection()
-    if not selected_item:
-        messagebox.showerror("Error", "No order selected.")
-        return
+def add_parameter_row():
+    """Add a new row for parameter input."""
+    row = len(parameter_entries) + 1
+    parameter_name_entry = tk.Entry(parameter_frame, width=15)
 
-    order_details = orders_tree.item(selected_item, "values")
-    if not order_details:
-        messagebox.showerror("Error", "Unable to fetch order details.")
-        return
+    parameter_name_entry.grid(row=row, column=0, padx=5, pady=5)
 
-    # Create a new frame to display order details
-    view_order_window = Toplevel(root)
-    view_order_window.title("Order Details")
-    view_order_window.geometry("600x600")
-    view_order_window.config(bg="white")
+    parameter_entries.append((parameter_name_entry,))  # Adjusted to store only parameter_name_entry
 
-    labels = ["Order ID", "Order By", "Component Name", "Order Date", "Due Date", "Low Allowed", "Peak Allowed", "Quantity"]
-    for i, label in enumerate(labels):
-        tk.Label(view_order_window, text=f"{label}:", bg="white", font=("Arial", 10, "bold")).grid(row=i, column=0, sticky="w", padx=10, pady=5)
-        tk.Label(view_order_window, text=order_details[i], bg="white", font=("Arial", 10)).grid(row=i, column=1, sticky="w", padx=10, pady=5)
-
-    # Frame for parameter inputs
-    parameter_frame = tk.Frame(view_order_window, bg="white")
-    parameter_frame.grid(row=len(labels), column=0, columnspan=2, pady=10, padx=10, sticky="nsew")
-
-    tk.Label(parameter_frame, text="Parameter Name", bg="white", font=("Arial", 10, "bold")).grid(row=0, column=0, padx=5, pady=5)
-
-    parameter_entries = []
-
-    def add_parameter_row():
-        """Add a new row for parameter input."""
-        row = len(parameter_entries) + 1
-        parameter_name_entry = tk.Entry(parameter_frame, width=20)
-        parameter_name_entry.grid(row=row, column=0, padx=5, pady=5)
-        parameter_entries.append(parameter_name_entry)
-
-    def save_parameters():
-        """Save all parameter details to the database."""
-        for parameter_name_entry in parameter_entries:
-            parameter_name = parameter_name_entry.get().strip()
-
-            if not parameter_name:
-                messagebox.showerror("Error", "All fields are required for each parameter.")
-                return
-
-            con = connect_db()
-            if con:
-                cursor = con.cursor()
-                try:
-                    cursor.execute("""
-                        INSERT INTO parametersDetails (orderId, parameterName)
-                        VALUES (?, ?)
-                    """, (order_details[0], parameter_name))
-                    con.commit()
-                except Exception as e:
-                    messagebox.showerror("Error", f"Failed to save parameter: {e}")
-                finally:
-                    con.close()
-
-        messagebox.showinfo("Success", "All parameters saved successfully!")
-        refresh_parameters()
-
-    def delete_parameter():
-        """Delete the selected parameter from the database."""
-        selected_item = parameter_tree.selection()
-        if not selected_item:
-            messagebox.showerror("Error", "No parameter selected.")
-            return
-
-        parameter_id = parameter_tree.item(selected_item, "values")[0]
-        con = connect_db()
-        if con:
-            cursor = con.cursor()
-            try:
-                cursor.execute("DELETE FROM parametersDetails WHERE id = ?", (parameter_id,))
-                con.commit()
-                messagebox.showinfo("Success", "Parameter deleted successfully!")
-                refresh_parameters()
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to delete parameter: {e}")
-            finally:
-                con.close()
-
-    def refresh_parameters():
-        """Fetch and display all parameters for the selected order."""
-        for row in parameter_tree.get_children():
-            parameter_tree.delete(row)
-        con = connect_db()
-        if con:
-            cursor = con.cursor()
-            cursor.execute("SELECT id, parameterName FROM parametersDetails WHERE orderId = ?", (order_details[0],))
-            for row in cursor.fetchall():
-                parameter_tree.insert("", "end", values=row)
-            con.close()
-
-    # Add initial row for parameter input
-    add_parameter_row()
-
-    # Buttons to add more rows and save parameters
-    tk.Button(view_order_window, text="Add Parameter", bg="#007BFF", fg="white", font=("Arial", 10), command=add_parameter_row).grid(row=len(labels) + 1, column=0, pady=10)
-    tk.Button(view_order_window, text="Save Parameters", bg="#28A745", fg="white", font=("Arial", 10), command=save_parameters).grid(row=len(labels) + 1, column=1, pady=10)
-
-    # Parameter table
-    parameter_table_frame = tk.Frame(view_order_window, bg="white")
-    parameter_table_frame.grid(row=len(labels) + 2, column=0, columnspan=2, pady=10, padx=10, sticky="nsew")
-
-    parameter_columns = ("ID", "Parameter Name")
-    parameter_tree = ttk.Treeview(parameter_table_frame, columns=parameter_columns, show="headings")
-    for col in parameter_columns:
-        parameter_tree.heading(col, text=col)
-        parameter_tree.column(col, anchor="center", width=150)
-
-    scroll_y = ttk.Scrollbar(parameter_table_frame, orient="vertical", command=parameter_tree.yview)
-    parameter_tree.configure(yscrollcommand=scroll_y.set)
-
-    parameter_tree.pack(side="left", fill="both", expand=True)
-    scroll_y.pack(side="right", fill="y")
-
-    tk.Button(view_order_window, text="Delete Parameter", bg="#DC3545", fg="white", font=("Arial", 10), command=delete_parameter).grid(row=len(labels) + 3, column=0, columnspan=2, pady=10)
-
-    refresh_parameters()
+def remove_parameter_row():
+    """Remove the last row of parameter input."""
+    if parameter_entries:
+        parameter_name_entry = parameter_entries.pop()[0]  # Adjusted to handle only parameter_name_entry
+        parameter_name_entry.destroy()
+    else:
+        messagebox.showinfo("Info", "No parameter fields to remove.")
 
 # Order Input Form
 order_form_frame = tk.Frame(main_frame, bg="white", padx=10, pady=10)
 order_form_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=10)
 
-tk.Label(order_form_frame, text="Order By:", bg="white", font=("Arial", 10)).grid(row=0, column=0, sticky="w", padx=5)
-order_by_entry = tk.Entry(order_form_frame, width=15)
-order_by_entry.grid(row=0, column=1, padx=5)
-
-tk.Label(order_form_frame, text="Component Name:", bg="white", font=("Arial", 10)).grid(row=0, column=2, sticky="w", padx=5)
+tk.Label(order_form_frame, text="Component Name:", bg="white", font=("Arial", 10)).grid(row=0, column=0, sticky="w", padx=5)
 component_name_entry = tk.Entry(order_form_frame, width=15)
-component_name_entry.grid(row=0, column=3, padx=5)
+component_name_entry.grid(row=0, column=1, padx=5)
 
-tk.Label(order_form_frame, text="Order Date:", bg="white", font=("Arial", 10)).grid(row=0, column=4, sticky="w", padx=5)
-order_date_entry = tk.Entry(order_form_frame, width=15)
-order_date_entry.grid(row=0, column=5, padx=5)
+# Add Part Number field
+tk.Label(order_form_frame, text="Part Number:", bg="white", font=("Arial", 10)).grid(row=1, column=0, sticky="w", padx=5)
+part_number_entry = tk.Entry(order_form_frame, width=15)
+part_number_entry.grid(row=1, column=1, padx=5)
 
-tk.Label(order_form_frame, text="Due Date:", bg="white", font=("Arial", 10)).grid(row=0, column=7, sticky="w", padx=5)
-due_date_entry = tk.Entry(order_form_frame, width=15)
-due_date_entry.grid(row=0, column=8, padx=5)
+# Adjust Submit button position
+tk.Button(order_form_frame, text="Submit", bg="#28A745", fg="white", font=("Arial", 10), command=submit_order_and_save_parameters).grid(row=2, column=2, pady=10, padx=5)
 
-tk.Label(order_form_frame, text="Low Allowed:", bg="white", font=("Arial", 10)).grid(row=1, column=0, sticky="w", padx=5)
-low_allowed_entry = tk.Entry(order_form_frame, width=15)
-low_allowed_entry.grid(row=1, column=1, padx=5)
+# Add Submit Button to save data into the database
+submit_button = tk.Button(order_form_frame, text="Submit Data", bg="#28A745", fg="white", font=("Arial", 10), command=submit_order_and_save_parameters)
+submit_button.grid(row=3, column=1, pady=10, padx=5)
 
-tk.Label(order_form_frame, text="Peak Allowed:", bg="white", font=("Arial", 10)).grid(row=1, column=2, sticky="w", padx=5)
-peak_allowed_entry = tk.Entry(order_form_frame, width=15)
-peak_allowed_entry.grid(row=1, column=3, padx=5)
+# Parameter Input Section
+parameter_frame = tk.Frame(order_form_frame, bg="white", padx=10, pady=10)
+parameter_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=10)
 
-tk.Label(order_form_frame, text="Quantity:", bg="white", font=("Arial", 10)).grid(row=1, column=4, sticky="w", padx=5)
-quantity_entry = tk.Entry(order_form_frame, width=15)
-quantity_entry.grid(row=1, column=5, padx=5)
+tk.Label(parameter_frame, text="Parameter Name", bg="white", font=("Arial", 10)).grid(row=0, column=0, padx=5, pady=5)
 
-tk.Button(order_form_frame, text="Submit", bg="#28A745", fg="white", font=("Arial", 10), command=submit_order).grid(row=1, column=6, columnspan=2, pady=10, padx=5)
+parameter_entries = []
+add_parameter_row()  # Add the first row for parameter input
+
+# Add "Add Parameter" and "Remove Parameter" buttons
+tk.Button(parameter_frame, text="Add Parameter", bg="#007BFF", fg="white", font=("Arial", 10), command=add_parameter_row).grid(row=0, column=3, padx=5, pady=5)
+tk.Button(parameter_frame, text="Remove Parameter", bg="#DC3545", fg="white", font=("Arial", 10), command=remove_parameter_row).grid(row=0, column=4, padx=5, pady=5)
 
 # Orders Table
 orders_table_frame = tk.Frame(main_frame, bg="white", padx=10, pady=10)
 orders_table_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
 
-columns = ("Order ID", "Order By", "Component Name", "Order Date", "Due Date", "Low Allowed", "Peak Allowed", "Quantity")
+# Update the orders table column headers
+columns = ("Serial Number", "Component Name", "Part Number", "Parameters")
 orders_tree = ttk.Treeview(orders_table_frame, columns=columns, show="headings")
 for col in columns:
     orders_tree.heading(col, text=col)
-    orders_tree.column(col, anchor="center", width=100)
+    orders_tree.column(col, anchor="center", width=150)
 
 scroll_y = ttk.Scrollbar(orders_table_frame, orient="vertical", command=orders_tree.yview)
 scroll_x = ttk.Scrollbar(orders_table_frame, orient="horizontal", command=orders_tree.xview)
@@ -531,9 +492,46 @@ scroll_x.pack(side="bottom", fill="x")
 
 refresh_orders()  # Populate the table initially
 
-# Add a "View" button to the orders table
-view_button = tk.Button(orders_table_frame, text="View Order", bg="#007BFF", fg="white", font=("Arial", 10), command=view_order)
-view_button.pack(side="top", pady=10)
+# Update references to "Order ID" in the populate_fields function
+def populate_fields(event):
+    """Populate the fields with the selected row's values."""
+    selected_item = orders_tree.selection()
+    if not selected_item:
+        return
+
+    order_details = orders_tree.item(selected_item, "values")
+    if not order_details:
+        return
+
+    # Clear existing fields
+    clear_order_form()
+
+    # Remove all parameter input fields
+    while parameter_entries:
+        remove_parameter_row()
+
+    # Populate the Component Name field
+    component_name_entry.insert(0, order_details[1])  # Assuming column 1 is Component Name
+    part_number_entry.insert(0, order_details[2])  # Assuming column 2 is Part Number
+
+    # Fetch and populate parameters for the selected order
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("""
+            SELECT parameterName, low, high
+            FROM parametersDetails
+            WHERE orderId = ?
+        """, (order_details[0],))  # Assuming column 0 is Serial Number
+        parameters = cursor.fetchall()
+        con.close()
+
+        for parameter_name, low, high in parameters:
+            add_parameter_row()
+            parameter_entries[-1][0].insert(0, parameter_name)  # Parameter Name
+
+# Bind the populate_fields function to the treeview selection
+orders_tree.bind("<<TreeviewSelect>>", populate_fields)
 
 main_frame.grid_rowconfigure(0, weight=0)  # Ensure the menubar row has no extra space
 main_frame.grid_rowconfigure(1, weight=0)  # Add a row for the order form
