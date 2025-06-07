@@ -291,9 +291,66 @@ for text in ["User Logout", "Add User"]:
     tk.Button(sidebar, text=text, bg='#003f7d', fg='white', font=("Arial", 10, "bold"),
               relief="flat", height=2, command=command).pack(fill="x", padx=10, pady=8)
 
+def open_main_database():
+    """Open a window displaying all records from measuredValues with Excel-like headers."""
+    db_window = tk.Toplevel(root)
+    db_window.title("Main Database")
+    db_window.geometry("1100x500")
+    db_window.config(bg="white")
+
+    # Excel-like column headers
+    excel_columns = ["A", "B", "C", "D", "E", "F", "G"]
+    data_columns = ["Sr.No.", "Date", "Time", "Operator", "Part No.", "Parameter Name", "Value"]
+
+    # Frame for Excel-like headers
+    header_frame = tk.Frame(db_window, bg="white")
+    header_frame.pack(fill="x", padx=10, pady=(10,0))
+    for idx, col in enumerate(excel_columns):
+        tk.Label(header_frame, text=col, bg="white", fg="black", font=("Arial", 10, "bold"), width=14, borderwidth=1, relief="solid").grid(row=0, column=idx, sticky="nsew")
+
+    # Treeview for data
+    tree = ttk.Treeview(db_window, columns=data_columns, show="headings")
+    for col in data_columns:
+        tree.heading(col, text=col)
+        tree.column(col, anchor="center", width=140)
+    tree.pack(fill="both", expand=True, padx=10, pady=(0,10))
+
+    style = ttk.Style()
+    style.configure("Treeview.Heading", font=("Arial", 10, "bold"))
+
+    # Fetch and display all records from measuredValues table
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS measuredValues (
+                orderId TEXT NOT NULL,
+                componentSerialNumber INTEGER NOT NULL,
+                componentName TEXT NOT NULL,
+                partNumber TEXT NOT NULL,
+                parameterName TEXT NOT NULL,
+                operatorName TEXT NOT NULL,
+                date TEXT NOT NULL,
+                time TEXT NOT NULL,
+                value REAL NOT NULL,
+                isValid TEXT NOT NULL,
+                PRIMARY KEY (orderId, componentSerialNumber, parameterName)
+            )
+        """)
+        cursor.execute("""
+            SELECT date, time, operatorName, partNumber, parameterName, value
+            FROM measuredValues
+            ORDER BY date, time, operatorName, partNumber, parameterName
+        """)
+        rows = cursor.fetchall()
+        for idx, row in enumerate(rows, start=1):
+            date, time_, operator, part_no, param_name, value = row
+            tree.insert("", "end", values=(idx, date, time_, operator, part_no, param_name, value))
+        con.close()
+
 # Right-side buttons
 ttk.Button(menubar, text="User Database", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
-ttk.Button(menubar, text="Main Database", bootstyle='secondary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
+ttk.Button(menubar, text="Main Database", bootstyle='secondary', padding=(15, 10), command=open_main_database).pack(side='right', padx=10, pady=10)
 ttk.Button(menubar, text="Generate Report", bootstyle='success', padding=(15, 10)).pack(side='right', padx=10, pady=10)
 
 def create_orders_table():
