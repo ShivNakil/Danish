@@ -133,8 +133,8 @@ password_entry.grid(row=1, column=1, padx=10)
 fname_entry.grid(row=2, column=1, padx=10)
 
 tk.Label(form_frame, text="Role:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=3, column=0, sticky="e", pady=5)
-role_var = tk.StringVar(value="Operator")  # Default value
-role_dropdown = ttk.Combobox(form_frame, textvariable=role_var, values=["Operator", "Supervisor"], state="readonly", width=28)
+role_var = tk.StringVar(value="operator")  # Default value
+role_dropdown = ttk.Combobox(form_frame, textvariable=role_var, values=["operator", "supervisor"], state="readonly", width=28)
 role_dropdown.grid(row=3, column=1, padx=10)
 
 # ---------- DB Actions ----------

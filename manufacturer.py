@@ -348,10 +348,108 @@ def open_main_database():
             tree.insert("", "end", values=(idx, date, time_, operator, part_no, param_name, value))
         con.close()
 
+def open_generate_report_popup():
+    """Open a popup to select filters and display filtered measuredValues."""
+    popup = tk.Toplevel(root)
+    popup.title("Generate Report")
+    popup.geometry("400x350")
+    popup.config(bg="white")
+
+    # --- Filter fields ---
+    tk.Label(popup, text="Start Date (YYYY-MM-DD):", bg="white").pack(pady=(15, 2))
+    start_date_var = tk.StringVar()
+    tk.Entry(popup, textvariable=start_date_var).pack()
+
+    tk.Label(popup, text="End Date (YYYY-MM-DD):", bg="white").pack(pady=(15, 2))
+    end_date_var = tk.StringVar()
+    tk.Entry(popup, textvariable=end_date_var).pack()
+
+    # Fetch operator names and part numbers for dropdowns
+    con = connect_db()
+    operator_names = []
+    part_numbers = []
+    if con:
+        cursor = con.cursor()
+        cursor.execute("SELECT DISTINCT operatorName FROM measuredValues")
+        operator_names = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT DISTINCT partNumber FROM measuredValues")
+        part_numbers = [row[0] for row in cursor.fetchall()]
+        con.close()
+
+    tk.Label(popup, text="Operator Name:", bg="white").pack(pady=(15, 2))
+    operator_var = tk.StringVar()
+    operator_dropdown = ttk.Combobox(popup, textvariable=operator_var, values=[""] + operator_names, state="readonly")
+    operator_dropdown.pack()
+
+    tk.Label(popup, text="Part Number:", bg="white").pack(pady=(15, 2))
+    partno_var = tk.StringVar()
+    partno_dropdown = ttk.Combobox(popup, textvariable=partno_var, values=[""] + part_numbers, state="readonly")
+    partno_dropdown.pack()
+
+    def show_report():
+        # Build SQL query based on selected filters
+        query = """
+            SELECT date, time, operatorName, partNumber, parameterName, value
+            FROM measuredValues
+            WHERE 1=1
+        """
+        params = []
+        if start_date_var.get():
+            query += " AND date >= ?"
+            params.append(start_date_var.get())
+        if end_date_var.get():
+            query += " AND date <= ?"
+            params.append(end_date_var.get())
+        if operator_var.get():
+            query += " AND operatorName = ?"
+            params.append(operator_var.get())
+        if partno_var.get():
+            query += " AND partNumber = ?"
+            params.append(partno_var.get())
+        query += " ORDER BY date, time, operatorName, partNumber, parameterName"
+
+        # Display results in a new window
+        result_win = tk.Toplevel(root)
+        result_win.title("Report Results")
+        result_win.geometry("1100x500")
+        result_win.config(bg="white")
+
+        excel_columns = ["A", "B", "C", "D", "E", "F", "G"]
+        data_columns = ["Sr.No.", "Date", "Time", "Operator", "Part No.", "Parameter Name", "Value"]
+
+        header_frame = tk.Frame(result_win, bg="white")
+        header_frame.pack(fill="x", padx=10, pady=(10,0))
+        for idx, col in enumerate(excel_columns):
+            tk.Label(header_frame, text=col, bg="white", fg="black", font=("Arial", 10, "bold"), width=14, borderwidth=1, relief="solid").grid(row=0, column=idx, sticky="nsew")
+
+        tree = ttk.Treeview(result_win, columns=data_columns, show="headings")
+        for col in data_columns:
+            tree.heading(col, text=col)
+            tree.column(col, anchor="center", width=140)
+        tree.pack(fill="both", expand=True, padx=10, pady=(0,10))
+
+        style = ttk.Style()
+        style.configure("Treeview.Heading", font=("Arial", 10, "bold"))
+
+        con = connect_db()
+        if con:
+            cursor = con.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            for idx, row in enumerate(rows, start=1):
+                date, time_, operator, part_no, param_name, value = row
+                tree.insert("", "end", values=(idx, date, time_, operator, part_no, param_name, value))
+            con.close()
+
+        popup.destroy()
+
+    tk.Button(popup, text="Show Report", bg="#28A745", fg="white", font=("Arial", 11), command=show_report).pack(pady=25)
+     
+
 # Right-side buttons
-ttk.Button(menubar, text="User Database", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
+# ttk.Button(menubar, text="User Database", bootstyle='primary', padding=(15, 10)).pack(side='right', padx=10, pady=10)
 ttk.Button(menubar, text="Main Database", bootstyle='secondary', padding=(15, 10), command=open_main_database).pack(side='right', padx=10, pady=10)
-ttk.Button(menubar, text="Generate Report", bootstyle='success', padding=(15, 10)).pack(side='right', padx=10, pady=10)
+ttk.Button(menubar, text="Generate Report", bootstyle='success', padding=(15, 10), command=open_generate_report_popup).pack(side='right', padx=10, pady=10)
 
 def create_orders_table():
     """Create the orders table in the database if it doesn't exist."""
@@ -599,4 +697,96 @@ order_form_frame.grid(row=1, column=0, sticky="ew", padx=20, pady=10)  # Place t
 orders_table_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)  # Place the orders table in the third row
 
 root.bind('<Configure>', on_resize)
+
+# --- Place these definitions and button creation BEFORE root.mainloop() ---
+
+def create_user_database_table():
+    """Create the user_database table if it doesn't exist."""
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_database (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                column_name TEXT NOT NULL
+            )
+        """)
+        con.commit()
+        con.close()
+
+create_user_database_table()
+
+def open_user_database_window():
+    """Open a window to select columns for the user database."""
+    win = tk.Toplevel(root)
+    win.title("User Database Column Selection")
+    win.geometry("500x600")
+    win.config(bg="white")
+
+    # Fetch measuredValues columns
+    con = connect_db()
+    columns = []
+    parameter_names = set()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("PRAGMA table_info(measuredValues)")
+        columns = [row[1] for row in cursor.fetchall() if row[1] != "parameterName"]
+        # Fetch all parameterName values
+        cursor.execute("SELECT DISTINCT parameterName FROM measuredValues")
+        for row in cursor.fetchall():
+            # Split comma-separated parameter names
+            for pname in row[0].split(","):
+                pname = pname.strip()
+                if pname:
+                    parameter_names.add(pname)
+        con.close()
+
+    # Frame for checkboxes
+    frame = tk.Frame(win, bg="white")
+    frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+    tk.Label(frame, text="Select columns to include:", bg="white", font=("Arial", 12, "bold")).pack(anchor="w", pady=(0,10))
+
+    # Dict to hold checkbox variables
+    checkbox_vars = {}
+
+    # Add checkboxes for measuredValues columns (excluding parameterName)
+    for col in columns:
+        var = tk.BooleanVar()
+        cb = tk.Checkbutton(frame, text=col, variable=var, bg="white", anchor="w")
+        cb.pack(fill="x", anchor="w")
+        checkbox_vars[col] = var
+
+    # Separator
+    tk.Label(frame, text="Parameter Names:", bg="white", font=("Arial", 11, "bold")).pack(anchor="w", pady=(15,5))
+
+    # Add checkboxes for each unique parameter name
+    for pname in sorted(parameter_names):
+        var = tk.BooleanVar()
+        cb = tk.Checkbutton(frame, text=pname, variable=var, bg="white", anchor="w")
+        cb.pack(fill="x", anchor="w")
+        checkbox_vars[pname] = var
+
+    def save_selected_columns():
+        selected = [col for col, var in checkbox_vars.items() if var.get()]
+        if not selected:
+            messagebox.showerror("Error", "Please select at least one column.")
+            return
+        con = connect_db()
+        if con:
+            cursor = con.cursor()
+            cursor.execute("DELETE FROM user_database")  # Clear previous selections
+            for col in selected:
+                cursor.execute("INSERT INTO user_database (column_name) VALUES (?)", (col,))
+            con.commit()
+            con.close()
+        messagebox.showinfo("Success", "Selected columns saved to user_database.")
+        win.destroy()
+
+    tk.Button(win, text="Save", bg="#28A745", fg="white", font=("Arial", 11), command=save_selected_columns).pack(pady=20)
+
+
+# Replace the old User Database button creation with this (before root.mainloop()):
+ttk.Button(menubar, text="User Database", bootstyle='primary', padding=(15, 10), command=open_user_database_window).pack(side='right', padx=10, pady=10)
+
 root.mainloop()
