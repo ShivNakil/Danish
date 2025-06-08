@@ -7,6 +7,7 @@ import os  # Import os for running external scripts
 import sqlite3  # Import SQLite for database operations
 from tkinter import simpledialog, Toplevel  # Import for date selection dialog and custom date picker dialog
 import sys  # Ensure sys is imported
+import pandas as pd  # Add this import at the top
 
 # Update database path to handle PyInstaller's temporary directory
 if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller bundle
@@ -295,28 +296,54 @@ def open_main_database():
     """Open a window displaying all records from measuredValues with Excel-like headers."""
     db_window = tk.Toplevel(root)
     db_window.title("Main Database")
-    db_window.geometry("1100x500")
+    db_window.state("zoomed")  # Maximize the window
     db_window.config(bg="white")
 
-    # Excel-like column headers
     excel_columns = ["A", "B", "C", "D", "E", "F", "G"]
     data_columns = ["Sr.No.", "Date", "Time", "Operator", "Part No.", "Parameter Name", "Value"]
+    col_width = 140
 
-    # Frame for Excel-like headers
-    header_frame = tk.Frame(db_window, bg="white")
-    header_frame.pack(fill="x", padx=10, pady=(10,0))
+    # Use a container frame for both header and treeview
+    container = tk.Frame(db_window, bg="white")
+    container.pack(fill="both", expand=True)  # removed padx/pady
+
+    # Header row
+    header_frame = tk.Frame(container, bg="white")
+    header_frame.grid(row=0, column=0, sticky="nsew")
     for idx, col in enumerate(excel_columns):
-        tk.Label(header_frame, text=col, bg="white", fg="black", font=("Arial", 10, "bold"), width=14, borderwidth=1, relief="solid").grid(row=0, column=idx, sticky="nsew")
-
-    # Treeview for data
-    tree = ttk.Treeview(db_window, columns=data_columns, show="headings")
-    for col in data_columns:
-        tree.heading(col, text=col)
-        tree.column(col, anchor="center", width=140)
-    tree.pack(fill="both", expand=True, padx=10, pady=(0,10))
+        lbl = tk.Label(
+            header_frame, text=col, bg="white", fg="black",
+            font=("Arial", 10, "bold"),
+            borderwidth=1, relief="solid", anchor="center",  # border for cell
+            highlightbackground="#cccccc", highlightcolor="#cccccc", highlightthickness=1
+        )
+        lbl.grid(row=0, column=idx, sticky="nsew", ipadx=1, ipady=4)
+        header_frame.grid_columnconfigure(idx, weight=1)  # removed minsize
 
     style = ttk.Style()
     style.configure("Treeview.Heading", font=("Arial", 10, "bold"))
+    style.configure("Excel.Treeview", rowheight=24, font=("Arial", 10))
+    style.map("Excel.Treeview", background=[("selected", "#CCE5FF")])
+    style.layout("Excel.Treeview", [
+        ('Treeview.field', {'sticky': 'nswe', 'children': [
+            ('Treeview.padding', {'sticky': 'nswe', 'children': [
+                ('Treeview.treearea', {'sticky': 'nswe'})
+            ]})
+        ]})
+    ])
+    style.configure("Excel.Treeview", bordercolor="#cccccc", borderwidth=1)
+    style.configure("Treeview", bordercolor="#cccccc", borderwidth=1)
+
+    tree = ttk.Treeview(container, columns=data_columns, show="headings", style="Excel.Treeview")
+    for idx, col in enumerate(data_columns):
+        tree.heading(col, text=col)
+        tree.column(col, anchor="center", stretch=True)  # stretch True
+    tree.grid(row=1, column=0, sticky="nsew")
+    container.grid_rowconfigure(1, weight=1)
+    container.grid_columnconfigure(0, weight=1)
+
+    tree.tag_configure('evenrow', background='#F7F7F7')
+    tree.tag_configure('oddrow', background='#FFFFFF')
 
     # Fetch and display all records from measuredValues table
     con = connect_db()
@@ -345,8 +372,61 @@ def open_main_database():
         rows = cursor.fetchall()
         for idx, row in enumerate(rows, start=1):
             date, time_, operator, part_no, param_name, value = row
-            tree.insert("", "end", values=(idx, date, time_, operator, part_no, param_name, value))
+            tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
+            tree.insert("", "end", values=(idx, date, time_, operator, part_no, param_name, value), tags=(tag,))
         con.close()
+
+    # Add Save and Print buttons below the table
+    def save_to_excel():
+        data = []
+        for row_id in tree.get_children():
+            data.append(tree.item(row_id)['values'])
+        df = pd.DataFrame(data, columns=data_columns)
+        from tkinter import filedialog
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*")]
+        )
+        if file_path:
+            df.to_excel(file_path, index=False)
+            messagebox.showinfo("Exported", f"Data exported to {file_path}")
+
+    def print_table():
+        import tempfile
+        import os
+        data = []
+        for row_id in tree.get_children():
+            data.append(tree.item(row_id)['values'])
+        df = pd.DataFrame(data, columns=data_columns)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            df.to_excel(tmp.name, index=False)
+            tmp_path = tmp.name
+        # Send the file to the default printer
+        if sys.platform == "win32":
+            # Windows: use the 'print' verb
+            os.startfile(tmp_path, "print")
+        else:
+            # macOS/Linux: try lpr
+            os.system(f"lpr '{tmp_path}'")
+
+    btn_frame = tk.Frame(container, bg="white")
+    btn_frame.grid(row=2, column=0, sticky="e", pady=8, padx=8)
+    # save_btn = tk.Button(btn_frame, text="Save as Excel", bg="#007BFF", fg="white", font=("Arial", 10, "bold"), command=save_to_excel)
+    # save_btn.pack(side="right", padx=(0, 16))  # Increased gap between buttons
+    # print_btn = tk.Button(btn_frame, text="Print", bg="#28A745", fg="white", font=("Arial", 10, "bold"), command=print_table)
+    # print_btn.pack(side="right")
+
+    print_btn = tk.Button(
+                btn_frame, text="Print", bg="#0047ab", fg="white", font=("Arial", 11),
+                command=print_table
+            )
+    print_btn.pack(side="left", padx=10)
+
+    save_btn = tk.Button(
+                btn_frame, text="Save as Excel", bg="#28A745", fg="white", font=("Arial", 11),
+                command=save_to_excel
+            )
+    save_btn.pack(side="left", padx=10)
 
 def open_generate_report_popup():
     """Open a popup to select filters and display filtered measuredValues."""
@@ -411,25 +491,54 @@ def open_generate_report_popup():
         # Display results in a new window
         result_win = tk.Toplevel(root)
         result_win.title("Report Results")
-        result_win.geometry("1100x500")
+        result_win.state("zoomed")  # Maximize the window
         result_win.config(bg="white")
 
         excel_columns = ["A", "B", "C", "D", "E", "F", "G"]
         data_columns = ["Sr.No.", "Date", "Time", "Operator", "Part No.", "Parameter Name", "Value"]
+        col_width = 140
 
-        header_frame = tk.Frame(result_win, bg="white")
-        header_frame.pack(fill="x", padx=10, pady=(10,0))
+        # Use a container frame for both header and treeview
+        container = tk.Frame(result_win, bg="white")
+        container.pack(fill="both", expand=True)  # removed padx/pady
+
+        # Header row
+        header_frame = tk.Frame(container, bg="white")
+        header_frame.grid(row=0, column=0, sticky="nsew")
         for idx, col in enumerate(excel_columns):
-            tk.Label(header_frame, text=col, bg="white", fg="black", font=("Arial", 10, "bold"), width=14, borderwidth=1, relief="solid").grid(row=0, column=idx, sticky="nsew")
-
-        tree = ttk.Treeview(result_win, columns=data_columns, show="headings")
-        for col in data_columns:
-            tree.heading(col, text=col)
-            tree.column(col, anchor="center", width=140)
-        tree.pack(fill="both", expand=True, padx=10, pady=(0,10))
+            lbl = tk.Label(
+                header_frame, text=col, bg="white", fg="black",
+                font=("Arial", 10, "bold"),
+                borderwidth=1, relief="solid", anchor="center",  # border for cell
+                highlightbackground="#cccccc", highlightcolor="#cccccc", highlightthickness=1
+            )
+            lbl.grid(row=0, column=idx, sticky="nsew", ipadx=1, ipady=4)
+            header_frame.grid_columnconfigure(idx, weight=1)  # removed minsize
 
         style = ttk.Style()
         style.configure("Treeview.Heading", font=("Arial", 10, "bold"))
+        style.configure("Excel.Treeview", rowheight=24, font=("Arial", 10))
+        style.map("Excel.Treeview", background=[("selected", "#CCE5FF")])
+        style.layout("Excel.Treeview", [
+            ('Treeview.field', {'sticky': 'nswe', 'children': [
+                ('Treeview.padding', {'sticky': 'nswe', 'children': [
+                    ('Treeview.treearea', {'sticky': 'nswe'})
+                ]})
+            ]})
+        ])
+        style.configure("Excel.Treeview", bordercolor="#cccccc", borderwidth=1)
+        style.configure("Treeview", bordercolor="#cccccc", borderwidth=1)
+
+        tree = ttk.Treeview(container, columns=data_columns, show="headings", style="Excel.Treeview")
+        for idx, col in enumerate(data_columns):
+            tree.heading(col, text=col)
+            tree.column(col, anchor="center", stretch=True)  # stretch True
+        tree.grid(row=1, column=0, sticky="nsew")
+        container.grid_rowconfigure(1, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+
+        tree.tag_configure('evenrow', background='#F7F7F7')
+        tree.tag_configure('oddrow', background='#FFFFFF')
 
         con = connect_db()
         if con:
@@ -438,8 +547,61 @@ def open_generate_report_popup():
             rows = cursor.fetchall()
             for idx, row in enumerate(rows, start=1):
                 date, time_, operator, part_no, param_name, value = row
-                tree.insert("", "end", values=(idx, date, time_, operator, part_no, param_name, value))
+                tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
+                tree.insert("", "end", values=(idx, date, time_, operator, part_no, param_name, value), tags=(tag,))
             con.close()
+
+        # Add Save and Print buttons below the table
+        def save_to_excel():
+            data = []
+            for row_id in tree.get_children():
+                data.append(tree.item(row_id)['values'])
+            df = pd.DataFrame(data, columns=data_columns)
+            from tkinter import filedialog
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx"), ("All files", "*")]
+            )
+            if file_path:
+                df.to_excel(file_path, index=False)
+                messagebox.showinfo("Exported", f"Data exported to {file_path}")
+
+        def print_table():
+            import tempfile
+            import os
+            data = []
+            for row_id in tree.get_children():
+                data.append(tree.item(row_id)['values'])
+            df = pd.DataFrame(data, columns=data_columns)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+                df.to_excel(tmp.name, index=False)
+                tmp_path = tmp.name
+            # Send the file to the default printer
+            if sys.platform == "win32":
+                # Windows: use the 'print' verb
+                os.startfile(tmp_path, "print")
+            else:
+                # macOS/Linux: try lpr
+                os.system(f"lpr '{tmp_path}'")
+
+        btn_frame = tk.Frame(container, bg="white")
+        btn_frame.grid(row=2, column=0, sticky="e", pady=8, padx=8)
+        # save_btn = tk.Button(btn_frame, text="Save as Excel", bg="#007BFF", fg="white", font=("Arial", 10, "bold"), command=save_to_excel)
+        # save_btn.pack(side="right", padx=(0, 16))  # Increased gap between buttons
+        # print_btn = tk.Button(btn_frame, text="Print", bg="#28A745", fg="white", font=("Arial", 10, "bold"), command=print_table)
+        # print_btn.pack(side="right")
+
+        print_btn = tk.Button(
+                btn_frame, text="Print", bg="#0047ab", fg="white", font=("Arial", 11),
+                command=print_table
+            )
+        print_btn.pack(side="left", padx=10)
+
+        save_btn = tk.Button(
+                btn_frame, text="Save as Excel", bg="#28A745", fg="white", font=("Arial", 11),
+                command=save_to_excel
+            )
+        save_btn.pack(side="left", padx=10)
 
         popup.destroy()
 

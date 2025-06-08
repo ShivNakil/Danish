@@ -1,2 +1,5 @@
 serial 
 pyserial
+pandas
+openpyxl
+pywin32

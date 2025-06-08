@@ -67,8 +67,92 @@ class HamburgerMenuApp:
             return btn
 
         create_rounded_btn(self.menu_inner, "Report Generation", self.generate_report).pack(pady=10, fill='x')
+        # Add User Database button below Report Generation
+        create_rounded_btn(self.menu_inner, "User Database", self.open_user_database).pack(pady=10, fill='x')
         create_rounded_btn(self.menu_inner, "User Logout", self.logout).pack(pady=10, fill='x')
         create_rounded_btn(self.menu_inner, "Communication", self.open_com_port_popup).pack(pady=10, fill='x')
+
+    # Add a stub for the User Database button action
+    def open_user_database(self):
+        # Open a window showing only the columns listed in user_database
+        self.open_user_database_window()
+
+    def open_user_database_window(self):
+        """Open a window displaying only the columns listed in user_database."""
+        win = tk.Toplevel(self.root)
+        win.title("User Database")
+        win.geometry("1100x500")
+        win.config(bg="white")
+
+        # Fetch selected columns from user_database table
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT column_name FROM user_database")
+            columns = [row[0] for row in cursor.fetchall()]
+            conn.close()
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error fetching user database columns: {e}")
+            win.destroy()
+            return
+
+        if not columns:
+            tk.Label(win, text="No columns selected in user_database.", bg="white", fg="red", font=("Arial", 12)).pack(pady=20)
+            return
+
+        # Treeview for data
+        tree = ttk.Treeview(win, columns=columns, show="headings")
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, anchor="center", width=140)
+        tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Fetch and display data from measuredValues table for selected columns
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            # Always fetch all columns needed for processing
+            cursor.execute("PRAGMA table_info(measuredValues)")
+            all_mv_cols = [row[1] for row in cursor.fetchall()]
+            fetch_cols = set(columns) & set(all_mv_cols)
+            fetch_cols.update(["parameterName", "value"])
+            fetch_cols = list(fetch_cols)
+            col_str = ", ".join([f'"{col}"' for col in fetch_cols])
+            cursor.execute(f"SELECT {col_str} FROM measuredValues")
+            rows = cursor.fetchall()
+            desc = [d[0] for d in cursor.description]
+            conn.close()
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Error fetching measuredValues data: {e}")
+            win.destroy()
+            return
+
+        # Helper to extract voltage/resistance from parameterName/value
+        def extract_param_value(param_name, value, target):
+            # param_name, value: both may be comma separated
+            if not param_name or not value:
+                return "n/a"
+            names = [n.strip().lower() for n in str(param_name).split(",")]
+            vals = [v.strip() for v in str(value).split(",")]
+            result = []
+            for n, v in zip(names, vals):
+                if target in n:
+                    result.append(v if v else "n/a")
+            return ", ".join(result) if result else "n/a"
+
+        for row in rows:
+            row_dict = dict(zip(desc, row))
+            display_row = []
+            for col in columns:
+                if col.lower() in ("voltage", "resistance"):
+                    val = extract_param_value(
+                        row_dict.get("parameterName", ""), row_dict.get("value", ""), col.lower()
+                    )
+                    display_row.append(val)
+                else:
+                    v = row_dict.get(col, None)
+                    display_row.append(v if v not in (None, "",) else "n/a")
+            tree.insert("", "end", values=display_row)
 
     def open_com_port_popup(self):
         """Open a popup window for Baud Rate and COM Port settings."""
@@ -380,7 +464,207 @@ class HamburgerMenuApp:
         messagebox.showinfo("Create User", "Create User functionality would go here")
 
     def generate_report(self):
-        messagebox.showinfo("Report Generation", "Report generation would be implemented here")
+        """Open a popup to select filters and display filtered measuredValues with restricted columns."""
+        popup = tk.Toplevel(self.root)
+        popup.title("Generate Report")
+        popup.geometry("400x350")
+        popup.config(bg="white")
+
+        # --- Filter fields ---
+        tk.Label(popup, text="Start Date (YYYY-MM-DD):", bg="white").pack(pady=(15, 2))
+        start_date_var = tk.StringVar()
+        tk.Entry(popup, textvariable=start_date_var).pack()
+
+        tk.Label(popup, text="End Date (YYYY-MM-DD):", bg="white").pack(pady=(15, 2))
+        end_date_var = tk.StringVar()
+        tk.Entry(popup, textvariable=end_date_var).pack()
+
+        # Fetch operator names and part numbers for dropdowns
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT operatorName FROM measuredValues")
+            operator_names = [row[0] for row in cursor.fetchall()]
+            cursor.execute("SELECT DISTINCT partNumber FROM measuredValues")
+            part_numbers = [row[0] for row in cursor.fetchall()]
+            conn.close()
+        except Exception:
+            operator_names = []
+            part_numbers = []
+
+        tk.Label(popup, text="Operator Name:", bg="white").pack(pady=(15, 2))
+        operator_var = tk.StringVar()
+        operator_dropdown = ttk.Combobox(popup, textvariable=operator_var, values=[""] + operator_names, state="readonly")
+        operator_dropdown.pack()
+
+        tk.Label(popup, text="Part Number:", bg="white").pack(pady=(15, 2))
+        partno_var = tk.StringVar()
+        partno_dropdown = ttk.Combobox(popup, textvariable=partno_var, values=[""] + part_numbers, state="readonly")
+        partno_dropdown.pack()
+
+        def show_report():
+            # Fetch restricted columns from user_database
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("SELECT column_name FROM user_database")
+                columns = [row[0] for row in cursor.fetchall()]
+                conn.close()
+            except Exception:
+                columns = []
+
+            if not columns:
+                messagebox.showerror("Error", "No columns selected in user_database.")
+                popup.destroy()
+                return
+
+            # Build SQL query based on selected filters
+            query = "SELECT * FROM measuredValues WHERE 1=1"
+            params = []
+            if start_date_var.get():
+                query += " AND date >= ?"
+                params.append(start_date_var.get())
+            if end_date_var.get():
+                query += " AND date <= ?"
+                params.append(end_date_var.get())
+            if operator_var.get():
+                query += " AND operatorName = ?"
+                params.append(operator_var.get())
+            if partno_var.get():
+                query += " AND partNumber = ?"
+                params.append(partno_var.get())
+            query += " ORDER BY date, time, operatorName, partNumber, parameterName"
+
+            # Display results in a new window
+            result_win = tk.Toplevel(self.root)
+            result_win.title("Report Results")
+            result_win.geometry("1100x500")
+            result_win.config(bg="white")
+
+            # Treeview for data
+            tree = ttk.Treeview(result_win, columns=columns, show="headings")
+            for col in columns:
+                tree.heading(col, text=col)
+                tree.column(col, anchor="center", width=140)
+            tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+            # Fetch and display filtered data
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA table_info(measuredValues)")
+                all_mv_cols = [row[1] for row in cursor.fetchall()]
+                fetch_cols = set(columns) & set(all_mv_cols)
+                fetch_cols.update(["parameterName", "value"])
+                fetch_cols = list(fetch_cols)
+                col_str = ", ".join([f'"{col}"' for col in fetch_cols])
+                cursor.execute(query.replace("SELECT *", f"SELECT {col_str}"), params)
+                rows = cursor.fetchall()
+                desc = [d[0] for d in cursor.description]
+                conn.close()
+            except Exception:
+                rows = []
+                desc = []
+
+            # Helper to extract voltage/resistance from parameterName/value
+            def extract_param_value(param_name, value, target):
+                if not param_name or not value:
+                    return "n/a"
+                names = [n.strip().lower() for n in str(param_name).split(",")]
+                vals = [v.strip() for v in str(value).split(",")]
+                result = []
+                for n, v in zip(names, vals):
+                    if target in n:
+                        result.append(v if v else "n/a")
+                return ", ".join(result) if result else "n/a"
+
+            for row in rows:
+                row_dict = dict(zip(desc, row))
+                display_row = []
+                for col in columns:
+                    if col.lower() in ("voltage", "resistance"):
+                        val = extract_param_value(
+                            row_dict.get("parameterName", ""), row_dict.get("value", ""), col.lower()
+                        )
+                        display_row.append(val)
+                    else:
+                        v = row_dict.get(col, None)
+                        display_row.append(v if v not in (None, "",) else "n/a")
+                tree.insert("", "end", values=display_row)
+
+            # --- Print Button ---
+            def print_report():
+                import tempfile
+                import platform
+                import subprocess
+                try:
+                    import openpyxl
+                except ImportError:
+                    messagebox.showerror("Missing Library", "openpyxl is required for printing as Excel.\nInstall it with: pip install openpyxl")
+                    return
+
+                # Create Excel file in temp
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.append(columns)
+                for item in tree.get_children():
+                    vals = tree.item(item, "values")
+                    ws.append(list(vals))
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as f:
+                    temp_path = f.name
+                    wb.save(temp_path)
+
+                # Open system print dialog for the Excel file
+                if platform.system() == "Windows":
+                    # This will open the default associated app's print dialog (usually Excel)
+                    os.startfile(temp_path, "print")
+                elif platform.system() == "Darwin":
+                    subprocess.run(["open", temp_path])
+                else:
+                    subprocess.run(["xdg-open", temp_path])
+
+            # --- Save as Excel Button ---
+            def save_as_excel():
+                try:
+                    import openpyxl
+                    from tkinter import filedialog
+                    wb = openpyxl.Workbook()
+                    ws = wb.active
+                    ws.append(columns)
+                    for item in tree.get_children():
+                        vals = tree.item(item, "values")
+                        ws.append(list(vals))
+                    file_path = filedialog.asksaveasfilename(
+                        defaultextension=".xlsx",
+                        filetypes=[("Excel files", "*.xlsx"), ("All files", "*")]
+                    )
+                    if file_path:
+                        wb.save(file_path)
+                        messagebox.showinfo("Saved", f"Report saved as {file_path}")
+                except ImportError:
+                    messagebox.showerror("Missing Library", "openpyxl is required to save as Excel.\nInstall it with: pip install openpyxl")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save Excel file:\n{e}")
+
+            # Button frame for Print and Save as Excel
+            btn_frame = tk.Frame(result_win, bg="white")
+            btn_frame.pack(side="bottom", pady=10)
+
+            print_btn = tk.Button(
+                btn_frame, text="Print", bg="#0047ab", fg="white", font=("Arial", 11),
+                command=print_report
+            )
+            print_btn.pack(side="left", padx=10)
+
+            save_excel_btn = tk.Button(
+                btn_frame, text="Save as Excel", bg="#28A745", fg="white", font=("Arial", 11),
+                command=save_as_excel
+            )
+            save_excel_btn.pack(side="left", padx=10)
+
+            popup.destroy()
+
+        tk.Button(popup, text="Show Report", bg="#28A745", fg="white", font=("Arial", 11), command=show_report).pack(pady=25)
 
     def logout(self):
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
@@ -468,6 +752,7 @@ class HamburgerMenuApp:
             self.populate_table()  # Refresh the table
         except sqlite3.Error as e:
             messagebox.showerror("Database Error", f"Error updating row: {e}")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
