@@ -49,44 +49,42 @@ root.configure(bg="white")  # Set consistent background color
 style = Style("cosmo")
 
 # Configure grid for responsive layout
-root.grid_rowconfigure(0, weight=1)
+root.grid_rowconfigure(0, weight=0)  # Menubar row (fixed height)
+root.grid_rowconfigure(1, weight=1)  # Main content row (sidebar + main_frame)
 root.grid_columnconfigure(1, weight=1)
 
-# Sidebar with blue background
-sidebar = tk.Frame(root, bg='#0047AB', width=250)  # Updated color to match other files
-sidebar.grid(row=0, column=0, sticky='ns')  # Sidebar aligned to the left
+# Menubar with blue background
+menubar = tk.Frame(root, bg='#0047AB', height=80)  # Updated color
+menubar.grid(row=0, column=0, columnspan=2, sticky='ew', pady=0)
+menubar.grid_propagate(False)
+main_frame = tk.Frame(root)
+main_frame.grid(row=1, column=1, sticky='nsew')  # Main frame aligned next to the sidebar
+main_frame.grid_rowconfigure(0, weight=0)  # Add a row for the order form
+main_frame.grid_rowconfigure(1, weight=1)  # Ensure the table container row takes remaining space
+main_frame.grid_columnconfigure(0, weight=1)
+
+# Sidebar with blue background, now below menubar
+sidebar = tk.Frame(root, bg='#0047AB', width=250)
 sidebar.grid_propagate(False)
 
 # Settings section with darker blue background
-settings_frame = tk.Frame(sidebar, bg='#003f7d', padx=10, pady=5)
+settings_frame = tk.Frame(sidebar, bg='black', padx=10, pady=5)  # Set to black for consistency
 settings_frame.pack_forget()
 
 # Report Generation Section with even darker blue
 ttk.Button(settings_frame, text="Baud Rate", bootstyle='secondary', padding=12).pack(fill='x', padx=5, pady=4)
-report_frame = tk.Frame(settings_frame, bg='#002f5d', padx=5, pady=2)
+report_frame = tk.Frame(settings_frame, bg='black', padx=5, pady=2)  # Set to black for consistency
 report_frame.pack(fill='x')
 
 # Form fields with consistent styling
 labels = ["Start Date", "End Date", "Username"]
 for lbl in labels:
-    frame = tk.Frame(report_frame, bg='#002f5d')
+    frame = tk.Frame(report_frame, bg='black')  # Set to black
     frame.pack(fill='x', pady=4)
-    tk.Label(frame, text=lbl, bg='#002f5d', fg='white', width=10, anchor='w').pack(side='left')
+    tk.Label(frame, text=lbl, bg='black', fg='white', width=10, anchor='w').pack(side='left')  # Set to black
     ttk.Entry(frame).pack(fill='x', expand=True, padx=5)
 
 ttk.Button(report_frame, text="Submit", bootstyle='success', padding=12).pack(fill='x', padx=5, pady=6)
-
-# Main content area
-main_frame = tk.Frame(root)
-main_frame.grid(row=0, column=1, sticky='nsew')  # Main frame aligned next to the sidebar
-main_frame.grid_rowconfigure(0, weight=0)  # Add a row for the order form
-main_frame.grid_rowconfigure(1, weight=1)  # Ensure the table container row takes remaining space
-main_frame.grid_columnconfigure(0, weight=1)
-
-# Menubar with blue background
-menubar = tk.Frame(main_frame, bg='#0047AB', height=80)  # Updated color
-menubar.grid(row=0, column=0, sticky='ew', pady=0)  # Remove any padding above the menu
-menubar.grid_propagate(False)
 
 # Fix sidebar toggle functionality
 sidebar_visible = False  # Start with sidebar hidden
@@ -94,16 +92,21 @@ sidebar_visible = False  # Start with sidebar hidden
 def toggle_sidebar():
     global sidebar_visible
     if sidebar_visible:
-        sidebar.grid_forget()  # Use grid_forget instead of pack_forget
+        sidebar.grid_forget()
         sidebar_visible = False
     else:
-        sidebar.grid(row=0, column=0, sticky='ns')  # Re-grid the sidebar
+        # Place sidebar in row 1, column 0 (below menubar)
+        sidebar.grid(row=1, column=0, sticky='ns')
         sidebar_visible = True
 
-# Add Burger Menu Button to toggle sidebar
-burger_btn = tk.Button(menubar, text="☰", font=("Arial", 14, "bold"), bg='#0047ab', fg='white',
-                       relief="flat", command=toggle_sidebar)
-burger_btn.pack(side="left", padx=10, pady=10)
+# Add Burger Menu Button to toggle sidebar in the menubar at the left
+burger_btn = tk.Button(
+    menubar, text="☰", font=("Arial", 14, "bold"),
+    bg="#5597F3", fg="white", relief="flat", borderwidth=0,
+    activebackground="#5597F3", activeforeground="white",
+    command=toggle_sidebar
+)
+burger_btn.pack(side='left', padx=(5, 15), pady=10)
 
 # Add blue background to the menu
 menubar.config(bg='#0047ab')
@@ -278,8 +281,20 @@ def open_com_port_popup():
     tk.Button(popup, text="Refresh Ports", bg="#007BFF", fg="white", font=("Arial", 10), command=refresh_com_ports).pack(pady=5)
 
 # Add a button to open the popup in the sidebar
-tk.Button(sidebar, text="Communication", bg='#003f7d', fg='white', font=("Arial", 10, "bold"),
-          relief="flat", height=2, command=open_com_port_popup).pack(fill="x", padx=10, pady=8)
+tk.Button(
+    sidebar,
+    text="Communication",
+    bg="#5597F3",
+    fg="white",
+    font=("Arial", 10, "bold"),
+    relief="flat",
+    borderwidth=0,
+    highlightthickness=0,
+    activebackground="#5597F3",
+    activeforeground="white",
+    height=2,
+    command=open_com_port_popup
+).pack(fill="x", padx=10, pady=(80, 8))
 
 for text in ["User Logout", "Add User"]:
     if text == "User Logout":
@@ -289,8 +304,19 @@ for text in ["User Logout", "Add User"]:
     else:
         command = dummy_action
 
-    tk.Button(sidebar, text=text, bg='#003f7d', fg='white', font=("Arial", 10, "bold"),
-              relief="flat", height=2, command=command).pack(fill="x", padx=10, pady=8)
+    tk.Button(
+        sidebar,
+        text=text,
+        bg="#5597F3",
+        fg="white",
+        font=("Arial", 10, "bold"),
+        relief="flat",
+        borderwidth=0,
+        activebackground="#5597F3",
+        activeforeground="white",
+        height=2,
+        command=command
+    ).pack(fill="x", padx=10, pady=8)
 
 def open_main_database():
     """Open a window displaying all records from measuredValues with Excel-like headers."""
@@ -721,8 +747,8 @@ def refresh_orders():
         cursor.execute("SELECT orderId, componentName, partNumber FROM orders")
         orders = cursor.fetchall()
 
-        for order in orders:
-            serial_number, component_name, part_number = order  # Rename order_id to serial_number
+        for idx, order in enumerate(orders, start=1):
+            serial_number, component_name, part_number = order
             # Fetch parameters for the order and format them with high and low values
             cursor.execute("""
                 SELECT parameterName, low, high
@@ -734,8 +760,9 @@ def refresh_orders():
             ]
             parameters_list = ", ".join(parameters)
 
-            # Insert the row with parameters into the table
-            orders_tree.insert("", "end", values=(serial_number, component_name, part_number, parameters_list))
+            # Insert the row with parameters into the table, with alternating row tags
+            tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
+            orders_tree.insert("", "end", values=(serial_number, component_name, part_number, parameters_list), tags=(tag,))
         con.close()
 
 def add_parameter_row():
@@ -798,6 +825,10 @@ orders_tree = ttk.Treeview(orders_table_frame, columns=columns, show="headings")
 for col in columns:
     orders_tree.heading(col, text=col)
     orders_tree.column(col, anchor="center", width=150)
+
+# Add striped row tags/colors (same as main database)
+orders_tree.tag_configure('evenrow', background="#FFFFFF")
+orders_tree.tag_configure('oddrow', background="#CFCFCF")
 
 scroll_y = ttk.Scrollbar(orders_table_frame, orient="vertical", command=orders_tree.yview)
 scroll_x = ttk.Scrollbar(orders_table_frame, orient="horizontal", command=orders_tree.xview)

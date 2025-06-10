@@ -46,24 +46,36 @@ class OperatorApp:
 
         # Communication Button in Sidebar
         self.com_baud_button = tk.Button(
-            self.sidebar, text="Communication", font=("Arial", 12, "bold"),
-            bg="#0047ab", fg="white", command=self.open_com_baud_popup
+            self.sidebar, text="Communication", font=("Arial", 10, "bold"),
+            bg="#5597F3", fg="white", relief="flat", height=2, 
+            command=self.open_com_baud_popup
         )
-        self.com_baud_button.pack(pady=10, padx=10, anchor="n")
+        self.com_baud_button.pack(fill="x", padx=10, pady=8)
 
         # Help and Support Button in Sidebar
         self.help_support_button = tk.Button(
-            self.sidebar, text="Help and Support", font=("Arial", 12, "bold"),
-            bg="#0047ab", fg="white", command=self.open_help_support
+            self.sidebar, text="Help and Support", font=("Arial", 10, "bold"),
+            bg="#5597F3", fg="white", relief="flat", height=2, 
+            command=self.open_help_support
         )
-        self.help_support_button.pack(pady=10, padx=10, anchor="n")
+        self.help_support_button.pack(fill="x", padx=10, pady=8)
+
+        # Log Out Button in Sidebar
+        self.logout_button = tk.Button(
+            self.sidebar, text="Log Out", font=("Arial", 10, "bold"),
+            bg="#5597F3", fg="white", relief="flat", height=2, 
+            command=self.logout_user
+        )
+        self.logout_button.pack(fill="x", padx=10, pady=8)
 
         # Arrow Button for Toggling Sidebar (Outer Edge)
         self.toggle_sidebar_button = tk.Button(
-            self.root, text="→", font=("Arial", 12, "bold"),
-            bg="#0047ab", fg="white", command=self.toggle_sidebar
+            self.root, text="☰", font=("Arial", 14, "bold"),
+            bg="#5597F3", fg="white", relief="flat", borderwidth=0,
+            activebackground="#5597F3", activeforeground="white",
+            command=self.toggle_sidebar
         )
-        self.toggle_sidebar_button.place(x=0, y=0, width=50, height=50)  # Sidebar hidden initially
+        self.toggle_sidebar_button.place(x=0, y=0, width=50, height=50)  # Fixed at top-left
 
         # === Main Area ===
         self.main_area = tk.Frame(self.root, bg="white")
@@ -167,6 +179,12 @@ class OperatorApp:
         self.submit_button.pack(side="bottom", pady=10)
 
         self.latest_serial_number = 0  # Initialize the latest serial number
+
+    def logout_user(self):
+        confirm = messagebox.askyesno("Logout", "Are you sure you want to log out?")
+        if confirm:
+            self.root.destroy()
+            os.system("python d:\\Engineering\\Manish\\manish\\login.py")  # Open login.py after logout
 
     def open_com_baud_popup(self):
         """Open a popup window for COM Port and Baud Rate settings."""
@@ -585,12 +603,12 @@ class OperatorApp:
         """Toggle the visibility of the sidebar."""
         if self.sidebar.winfo_ismapped():
             self.sidebar.pack_forget()
-            self.toggle_sidebar_button.config(text="→")  # Change arrow direction
-            self.toggle_sidebar_button.place(x=0, y=0, width=50, height=50)  # Adjust position
+            # Do not move the toggle button, keep it at (0,0)
+            # self.toggle_sidebar_button.config(text="→")  # Optionally change icon if you want
         else:
             self.sidebar.pack(side="left", fill="y")
-            self.toggle_sidebar_button.config(text="←")  # Change arrow direction
-            self.toggle_sidebar_button.place(x=200, y=0, width=50, height=50)  # Adjust position
+            # self.toggle_sidebar_button.config(text="←")  # Optionally change icon if you want
+            # Do not move the toggle button, keep it at (0,0)
 
     def open_help_support(self):
         """Open a popup window for Help and Support."""

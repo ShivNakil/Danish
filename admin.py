@@ -45,6 +45,26 @@ WHITE = "#FFFFFF"
 top_bar = tk.Frame(root, bg=BLUE2, height=40)
 top_bar.pack(side="top", fill="x")
 
+# Define toggle_sidebar before using it
+def toggle_sidebar():
+    global sidebar_visible
+    if sidebar_visible:
+        sidebar.pack_forget()
+        sidebar_visible = False
+    else:
+        sidebar.pack(side="left", fill="y")
+        main_area.pack_forget()
+        main_area.pack(side="left", fill="both", expand=True)
+        sidebar_visible = True
+
+burger_btn = tk.Button(top_bar, text="☰", font=("Arial", 14, "bold"), bg=BLUE2, fg=WHITE,
+                      relief="flat", command=toggle_sidebar)
+burger_btn.pack(side="left", padx=10)
+
+# Center "Admin Dashboard" in the top bar
+admin_label = tk.Label(top_bar, text="Admin Dashboard", bg=BLUE2, fg=WHITE, font=("Arial", 16, "bold"))
+admin_label.pack(side="top", fill="x", expand=True, pady=2)
+
 # ---------- Global Variables ----------
 user_id = tk.StringVar()
 sidebar_visible = False  # Start with sidebar hidden
@@ -72,14 +92,6 @@ def toggle_sidebar():
         main_area.pack_forget()
         main_area.pack(side="left", fill="both", expand=True)
         sidebar_visible = True
-
-burger_btn = tk.Button(top_bar, text="☰", font=("Arial", 14, "bold"), bg=BLUE2, fg=WHITE,
-                      relief="flat", command=toggle_sidebar)
-burger_btn.pack(side="left", padx=10)
-
-
-def dummy_action():
-    messagebox.showinfo("Info", "This button does nothing yet.")
 
 def show_user_management():
     # Show the form and buttons when "Create User" is clicked
@@ -112,13 +124,13 @@ for text in ["User Logout", "Add User"]:
     else:
         command = dummy_action
 
-    tk.Button(sidebar, text=text, bg='#0047AB', fg='white', font=("Arial", 10, "bold"),  # Updated color
+    tk.Button(sidebar, text=text, bg="#5597F3", fg='white', font=("Arial", 10, "bold"),  # Updated color
               relief="flat", height=2, command=command).pack(fill="x", padx=10, pady=8)
 
 # ---------- User Form ----------
 form_frame = tk.Frame(main_area, bg=WHITE)
 btn_frame = tk.Frame(main_area, bg=WHITE)
-tree_frame = tk.Frame(main_area, bg=WHITE)
+tree_frame = tk.Frame(main_area, bg=WHITE, highlightbackground="#B0B0B0", highlightthickness=1)
 
 tk.Label(form_frame, text="Username:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=0, column=0, sticky="e", pady=5)
 tk.Label(form_frame, text="Password:", bg=WHITE, fg=BLUE1, font=("Arial", 10)).grid(row=1, column=0, sticky="e", pady=5)
@@ -145,9 +157,13 @@ def refresh_users():
     if con:
         cursor = con.cursor()
         cursor.execute("SELECT id, username, name, employee_type FROM users")
-        for row in cursor.fetchall():
-            tree.insert("", "end", values=row)
+        for idx, row in enumerate(cursor.fetchall()):
+            tag = "evenrow" if idx % 2 == 0 else "oddrow"
+            tree.insert("", "end", values=row, tags=(tag,))
         con.close()
+    # Only background is supported here
+    tree.tag_configure("evenrow", background="#F3F6FA")
+    tree.tag_configure("oddrow", background=WHITE)
 
 def create_user():
     uname = username_entry.get().strip()
@@ -255,20 +271,64 @@ tk.Button(btn_frame, text="Clear", bg=WHITE, fg=BLUE2, width=12, command=clear_f
 save_btn = tk.Button(btn_frame, text="Save", bg="#28A745", fg="white", width=12, command=save_user)
 
 # ---------- Treeview (User Table) ----------
-tree_frame = tk.Frame(main_area, bg=WHITE)
+tree_frame = tk.Frame(main_area, bg=WHITE, highlightbackground="#B0B0B0", highlightthickness=1)
 tree_frame.pack(padx=10, pady=20, fill="both", expand=True)
-def hide_user_interface():
-    form_frame.pack_forget()
-    btn_frame.pack_forget()
-    tree_frame.pack_forget()
+
+# Add Treeview style for Excel-like appearance with visible borders
+style = ttk.Style()
+style.theme_use("default")
+style.configure("Custom.Treeview",
+    background=WHITE,
+    foreground="black",
+    rowheight=28,
+    fieldbackground=WHITE,
+    bordercolor="#B0B0B0",
+    borderwidth=1,
+    relief="solid"
+)
+style.map("Custom.Treeview", background=[("selected", "#B6D7FF")])
+
+# Header style: bold, blue background, white text, border
+style.configure("Custom.Treeview.Heading",
+    font=("Arial", 11, "bold"),
+    background="#E5F1FB",
+    foreground="#0047AB",
+    borderwidth=1,
+    relief="solid"
+)
+
+# Simulate cell borders in the body by alternating row colors and using tags
+style.layout("Custom.Treeview", [
+    ('Treeview.field', {'sticky': 'nswe', 'border': '1', 'children': [
+        ('Treeview.padding', {'sticky': 'nswe', 'children': [
+            ('Treeview.treearea', {'sticky': 'nswe'})
+        ]})
+    ]})
+])
 
 columns = ("ID", "Username", "Name", "Role")
-tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
+tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Custom.Treeview")
 for col in columns:
     tree.heading(col, text=col)
-    tree.column(col, anchor="center")
+    tree.column(col, anchor="center", width=120, minwidth=80)
 
 tree.pack(fill="both", expand=True)
+
+# Modify refresh_users to add striped rows
+def refresh_users():
+    for row in tree.get_children():
+        tree.delete(row)
+    con = connect_db()
+    if con:
+        cursor = con.cursor()
+        cursor.execute("SELECT id, username, name, employee_type FROM users")
+        for idx, row in enumerate(cursor.fetchall()):
+            tag = "evenrow" if idx % 2 == 0 else "oddrow"
+            tree.insert("", "end", values=row, tags=(tag,))
+        con.close()
+    # Only background is supported here
+    tree.tag_configure("evenrow", background="#F3F6FA")
+    tree.tag_configure("oddrow", background=WHITE)
 
 # ---------- Select Row to Form ----------
 def on_tree_select(event):
@@ -317,8 +377,13 @@ def refresh_com_ports_dropdown(dropdown, var):
         var.set("No COM Ports Available")
 
 # Add a button to open the popup in the sidebar
-tk.Button(sidebar, text="Communication", bg='#0047AB', fg='white', font=("Arial", 10, "bold"),
+tk.Button(sidebar, text="Communication", bg="#5597F3", fg='white', font=("Arial", 10, "bold"),
           relief="flat", height=2, command=open_baud_com_popup).pack(fill="x", padx=10, pady=8)
+
+def hide_user_interface():
+    form_frame.pack_forget()
+    btn_frame.pack_forget()
+    tree_frame.pack_forget()
 
 hide_user_interface() 
 refresh_users()

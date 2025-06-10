@@ -4,14 +4,19 @@ import subprocess
 import sqlite3  # Import SQLite library
 import os
 import sys  # Ensure sys is imported
+import shutil  # <-- Add this import
 
 # Update database path to handle PyInstaller's temporary directory
 if getattr(sys, 'frozen', False):  # Check if running as a PyInstaller bundle
-    BASE_DIR = sys._MEIPASS  # Temporary directory created by PyInstaller
+    BASE_DIR = os.path.dirname(sys.executable)
+    DB_SRC = os.path.join(sys._MEIPASS, "login.db")
+    DB_PATH = os.path.join(BASE_DIR, "login.db")
+    # Copy login.db from temp to writable folder if not already present
+    if not os.path.exists(DB_PATH):
+        shutil.copy(DB_SRC, DB_PATH)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-DB_PATH = os.path.join(BASE_DIR, "login.db")
+    DB_PATH = os.path.join(BASE_DIR, "login.db")
 
 # Main application window
 root = tk.Tk()
@@ -67,13 +72,9 @@ login_button.pack(pady=30)
 forgot_password = tk.Label(login_frame, text="Forgot password?", fg="white", bg="#0047AB", font=("Arial", 12, "italic"), cursor="hand2")  # Adjusted font size
 forgot_password.pack(pady=10)
 
-# Menu icon as a placeholder
-menu_label = tk.Label(root, text="☰", font=("Arial", 24), bg="#F5F5F5", fg="#0052CC")
-menu_label.place(x=20, y=20)
-
 # Company logo text
-logo_label = tk.Label(root, text="InThink\nTechnologies", fg="#333333", bg="#F5F5F5", font=("Arial", 14, "bold"), justify="right")
-logo_label.place(x=650, y=20)
+logo_label = tk.Label(root, text="InThink\nTechnologies", fg="#333333", bg="#F5F5F5", font=("Arial", 24, "bold"), justify="center")
+logo_label.place(relx=0.5, y=20, anchor="n")  # Centered at the top
 
 # Function to launch OperatorScreen
 def launch_operator_screen(username, name):
